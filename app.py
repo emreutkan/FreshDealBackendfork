@@ -11,10 +11,6 @@ load_dotenv()
 def create_app():
     app = Flask(__name__)
 
-    ### Home Route ###
-    @app.route('/')
-    def index():
-        return render_template('index.html')
 
     @app.route('/ping', methods=['GET'])
     def ping():
