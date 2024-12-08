@@ -16,7 +16,7 @@ def create_app():
 
     ### Database Configuration ###
     required_env_vars = {
-        "DB_SERVER": os.getenv("DB_SERVER"),
+        "DB_SERVER": os.getenv("DB_SERVER"), # test
         "DB_NAME": os.getenv("DB_NAME"),
         "DB_USERNAME": os.getenv("DB_USERNAME"),
         "DB_PASSWORD": os.getenv("DB_PASSWORD"),
