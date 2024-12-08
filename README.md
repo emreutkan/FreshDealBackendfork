@@ -3,3 +3,5 @@
 
 1. python -m venv venv
 2. venv activate
+
+3. 
