@@ -1,7 +1,5 @@
 # FreshDealBackend
 
 
-1. python -m venv venv
-2. venv activate
-
-3. 
+### Before each commit 
+    pip freeze > requirements.txt
