@@ -1,4 +1,6 @@
 import os
+
+import sqlalchemy
 from flask import Flask, render_template
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
@@ -43,7 +45,23 @@ def create_app():
     app.config['JWT_SECRET_KEY'] = required_env_vars['JWT_SECRET_KEY']
     JWTManager(app)
 
+
     db.init_app(app)  # Initialize the database
+
+    with app.app_context():
+        db.create_all()
+
+    # Check database connection
+    try:
+        engine = sqlalchemy.create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
+        connection = engine.connect()
+        connection.close()
+        print("Database connection successful.")
+    except Exception as e:
+        print(f"Error connecting to the database: {e}")
+        # Here you might want to handle the error,
+        # such as exiting the application or using a fallback configuration.
+
     init_app(app)  # Register the blueprints using the init_app function
 
     return app
