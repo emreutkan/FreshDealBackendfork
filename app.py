@@ -3,6 +3,8 @@ from flask import Flask, render_template
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from dotenv import load_dotenv
+from models import db
+from routes import init_app
 
 # Load environment variables
 load_dotenv()
@@ -40,6 +42,9 @@ def create_app():
     ### JWT Configuration ###
     app.config['JWT_SECRET_KEY'] = required_env_vars['JWT_SECRET_KEY']
     JWTManager(app)
+
+    db.init_app(app)  # Initialize the database
+    init_app(app)  # Register the blueprints using the init_app function
 
     return app
 
