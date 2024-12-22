@@ -64,6 +64,9 @@ def create_app():
 
     init_app(app)  # Register the blueprints using the init_app function
 
+    ### Initialize CORS ###
+    CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins (adjust as needed)
+
     return app
 
 app = create_app()
