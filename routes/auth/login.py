@@ -124,5 +124,5 @@ def login():
             return jsonify({"success": False, "message": "Invalid step"}), 400
 
     if LOGIN_SUCCESS:
-        token = create_access_token(identity=user_data.id)
+        token = create_access_token(identity=str(user_data.id))
         return jsonify({"success": True, "token": token}), 200
