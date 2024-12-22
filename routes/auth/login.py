@@ -25,12 +25,6 @@ def get_user_by_email(email):
 def get_user_by_phone(phone_number):
     return User.query.filter_by(phone_number=phone_number).first() if phone_number else None
 
-def verify_password(user, password):
-    if not user or not check_password_hash(user.password, password):
-        return False
-    return True
-
-
 def generate_verification_code(ip=None,login_type=None):
     return auth_code_generator.generate_verification_code(ip=ip, identifier=login_type) # True, code
 
@@ -90,7 +84,10 @@ def login():
 
     match step:
         case "skip_verification":
-            LOGIN_SUCCESS = verify_password(user_data,password)
+            if check_password_hash(user_data.password, password):
+                LOGIN_SUCCESS = True
+            else:
+                return jsonify({"success": False, "message": "Wrong password"}), 400
 
         case "send_code":
             response, message = generate_verification_code(ip=ip, login_type=login_type)
