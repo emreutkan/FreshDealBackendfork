@@ -276,6 +276,74 @@ components:
             description:
               type: string
 
+    # --------------------------
+    #      Register Request
+    # --------------------------
+    RegisterRequest:
+      type: object
+      required:
+        - name_surname
+        - password
+        - role
+      properties:
+        name_surname:
+          type: string
+          description: Full name of the user
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          description: User's email address (optional if phone_number is provided)
+          example: "johndoe@example.com"
+          pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        phone_number:
+          type: string
+          description: User's phone number in international format (optional if email is provided)
+          example: "+14155552671"
+          pattern: '^\+[1-9]\d{1,14}$'
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: |
+            Password must have at least:
+            - 8 characters
+            - 1 uppercase letter
+            - 1 lowercase letter
+            - 1 digit
+          example: "SecurePass123"
+        role:
+          type: customer | owner
+          example: "customer"
+
+
+    # --------------------------
+    #      Register Response
+    # --------------------------
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "User registered successfully!"
+
+    # --------------------------
+    #      Register Error Response
+    # --------------------------
+    RegisterErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error message detailing what went wrong."
+
 paths:
   #####################################
   #            Address Paths
@@ -349,7 +417,7 @@ paths:
   #####################################
   #           Authentication
   #####################################
-  /auth/login:
+  /login:
     post:
       summary: User Login
       description: |
@@ -400,23 +468,20 @@ paths:
                   password_login: false
                   phone_number: "+14155552671"
                   step: "send_code"
+              existingInfo:
+                summary: 0000 0
+                value:
+                  login_type: "phone_number"
+                  password_login: true
+                  phone_number: "0000"
+                  password: "0"
       responses:
         "200":
           description: Successful login (for password login) or verification code sent (for passwordless login)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                  token:
-                    type: string
-                    description: JWT token (only for successful password login)
-                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                $ref: '#/components/schemas/LoginResponse'
         "400":
           description: Bad request or validation error
         "401":
@@ -446,3 +511,66 @@ paths:
           description: User not found
         "500":
           description: Server error
+
+  #####################################
+  #            Registration
+  #####################################
+  /register:
+    post:
+      summary: User Registration
+      description: Register a new user with either email or phone number.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              RegisterWithEmail:
+                summary: Register with Email
+                value:
+                  name_surname: "John Doe"
+                  email: "johndoe@example.com"
+                  password: "SecurePass123"
+                  role: "customer"
+              RegisterWithPhone:
+                summary: Register with Phone Number
+                value:
+                  name_surname: "Jane Smith"
+                  phone_number: "+14155552671"
+                  password: "AnotherPass456"
+                  role: "customer"
+
+              RegisterWithEmailAndPhone:
+                summary: Register with Both Email and Phone Number
+                value:
+                  name_surname: "Alice Johnson"
+                  email: "alice@example.com"
+                  phone_number: "+14155552672"
+                  password: "StrongPass789"
+                  role: "customer"
+
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        "400":
+          description: Validation error or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterErrorResponse'
+        "409":
+          description: Conflict - Email or phone number already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterErrorResponse'
+        "500":
+          description: Server error
+
