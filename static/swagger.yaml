@@ -314,7 +314,8 @@ components:
             - 1 digit
           example: "SecurePass123"
         role:
-          type: customer | owner
+          type: string
+          enum: [customer, owner]
           example: "customer"
 
 
