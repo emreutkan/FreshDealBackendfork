@@ -348,7 +348,7 @@ paths:
   #####################################
   #            Address Paths
   #####################################
-  /address/add_customer_address:
+  /add_customer_address:
     post:
       summary: Add a customer address
       description: Add a new address for the logged-in user.
@@ -370,7 +370,7 @@ paths:
         "500":
           description: Server error
 
-  /address/get_customer_address:
+  /get_customer_address:
     get:
       summary: Get customer addresses
       description: Retrieve all addresses associated with the logged-in user.
@@ -392,7 +392,7 @@ paths:
         "500":
           description: Server error
 
-  /address/delete_customer_address/{id}:
+  /delete_customer_address/{id}:
     delete:
       summary: Delete a customer address
       description: Delete an address by ID for the logged-in user.
