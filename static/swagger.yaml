@@ -1,0 +1,448 @@
+openapi: 3.0.0
+info:
+  title: Flask API
+  description: API for managing users, authentication, and customer addresses.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8181/v1
+  - url: https://freshdealapi-fkfaajfaffh4c0ex.uksouth-01.azurewebsites.net/v1
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --------------------------
+    #        User Schema
+    # --------------------------
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the user
+          example: 1234
+        name:
+          type: string
+          description: User's full name
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "johndoe@example.com"
+        phone_number:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: User's phone number in international format
+          example: "+14155552671"
+        role:
+          type: string
+          description: User's role in the system
+          enum: [user, admin, manager]
+          example: "user"
+
+    # --------------------------
+    #       Address Schema
+    # --------------------------
+    Address:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the address
+          example: 5678
+        title:
+          type: string
+          description: Custom title for the address
+          example: "Home"
+        longitude:
+          type: number
+          format: float
+          description: Geographical longitude
+          example: 28.97953
+        latitude:
+          type: number
+          format: float
+          description: Geographical latitude
+          example: 41.015137
+        street:
+          type: string
+          description: Street name
+          example: "Main Street"
+        neighborhood:
+          type: string
+          description: Neighborhood name
+          example: "Downtown"
+        district:
+          type: string
+          description: District name
+          example: "Financial District"
+        province:
+          type: string
+          description: Province/State name
+          example: "California"
+        country:
+          type: string
+          description: Country name
+          example: "United States"
+        postalCode:
+          type: integer
+          description: Postal/ZIP code
+          example: 94105
+        apartmentNo:
+          type: integer
+          description: Apartment number
+          example: 42
+        doorNo:
+          type: string
+          description: Door number
+          example: "4B"
+
+    # --------------------------
+    #    User Response Schema
+    # --------------------------
+    UserResponse:
+      type: object
+      properties:
+        user_data:
+          $ref: '#/components/schemas/User'
+        user_address_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+      example:
+        user_data:
+          id: 1234
+          name: "John Doe"
+          email: "johndoe@example.com"
+          phone_number: "+14155552671"
+          role: "user"
+        user_address_list:
+          - id: 5678
+            title: "Home"
+            longitude: 28.97953
+            latitude: 41.015137
+            street: "Main Street"
+            neighborhood: "Downtown"
+            district: "Financial District"
+            province: "California"
+            country: "United States"
+            postalCode: 94105
+            apartmentNo: 42
+            doorNo: "4B"
+
+    # --------------------------
+    #    Shared Login Base
+    # --------------------------
+    LoginBaseSchema:
+      type: object
+      required:
+        - login_type
+        - password_login
+      properties:
+        login_type:
+          type: string
+          enum: [email, phone_number]
+          description: Specifies the authentication method
+        password_login:
+          type: boolean
+          description: True if password-based; False if passwordless
+
+    # --------------------------
+    #    Password Login
+    # --------------------------
+    PasswordLogin:
+      allOf:
+        - $ref: '#/components/schemas/LoginBaseSchema'
+        - type: object
+          required:
+            - password
+          properties:
+            password_login:
+              type: boolean
+              enum: [true]
+              description: Must be true for password-based login
+            email:
+              type: string
+              format: email
+              example: "user@example.com"
+              description: Required when login_type is email
+              pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            phone_number:
+              type: string
+              example: "+14155552671"
+              description: Required when login_type is phone_number
+              pattern: '^\+[1-9]\d{1,14}$'
+            password:
+              type: string
+              format: password
+              minLength: 8
+              maxLength: 128
+              description: |
+                Password must have at least:
+                - 8 characters
+                - 1 uppercase letter
+                - 1 lowercase letter
+                - 1 digit
+              example: "SecurePass123"
+
+    # --------------------------
+    #   Passwordless Login
+    # --------------------------
+    PasswordlessLogin:
+      allOf:
+        - $ref: '#/components/schemas/LoginBaseSchema'
+        - type: object
+          required:
+            - step
+          properties:
+            password_login:
+              type: boolean
+              enum: [false]
+              description: Must be false for passwordless login
+            email:
+              type: string
+              format: email
+              example: "user@example.com"
+              description: Required when login_type is email
+              pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            phone_number:
+              type: string
+              example: "+14155552671"
+              description: Required when login_type is phone_number
+              pattern: '^\+[1-9]\d{1,14}$'
+            step:
+              type: string
+              enum: [send_code]
+              description: Must be 'send_code' for initial passwordless request
+
+    # --------------------------
+    #    Login Request Schema
+    # --------------------------
+    LoginRequest:
+      oneOf:
+        - $ref: '#/components/schemas/PasswordLogin'
+        - $ref: '#/components/schemas/PasswordlessLogin'
+
+    # --------------------------
+    #    Login Response
+    # --------------------------
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        token:
+          type: string
+          description: JWT token (only for successful password login)
+        details:
+          type: object
+          properties:
+            error_code:
+              type: string
+              enum:
+                - MISSING_LOGIN_TYPE
+                - INVALID_CREDENTIALS
+                - USER_NOT_FOUND
+                - INVALID_EMAIL_FORMAT
+                - INVALID_PHONE_FORMAT
+                - RATE_LIMIT_EXCEEDED
+            description:
+              type: string
+
+    # --------------------------
+    #       Login Error
+    # --------------------------
+    LoginError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        details:
+          type: object
+          properties:
+            error_code:
+              type: string
+            description:
+              type: string
+
+paths:
+  #####################################
+  #            Address Paths
+  #####################################
+  /address/add_customer_address:
+    post:
+      summary: Add a customer address
+      description: Add a new address for the logged-in user.
+      tags:
+        - Address
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Address'
+      responses:
+        "201":
+          description: Address added
+        "400":
+          description: Validation error
+        "500":
+          description: Server error
+
+  /address/get_customer_address:
+    get:
+      summary: Get customer addresses
+      description: Retrieve all addresses associated with the logged-in user.
+      tags:
+        - Address
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Address'
+        "404":
+          description: No addresses found
+        "500":
+          description: Server error
+
+  /address/delete_customer_address/{id}:
+    delete:
+      summary: Delete a customer address
+      description: Delete an address by ID for the logged-in user.
+      tags:
+        - Address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Address deleted
+        "404":
+          description: Address not found
+        "500":
+          description: Server error
+
+  #####################################
+  #           Authentication
+  #####################################
+  /auth/login:
+    post:
+      summary: User Login
+      description: |
+        Authentication endpoint supporting both password-based and passwordless login.
+
+        Scenarios:
+        A. Password Login (`password_login: true`)
+           - A.1 Email + Password
+           - A.2 Phone Number + Password
+
+        B. Passwordless Login (`password_login: false`)
+           - B.1 Email (sends verification code)
+           - B.2 Phone Number (sends verification code)
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              PasswordLogin_Email:
+                summary: Password Login with Email (A.1)
+                value:
+                  login_type: "email"
+                  password_login: true
+                  email: "user@example.com"
+                  password: "SecurePass123"
+              PasswordLogin_Phone:
+                summary: Password Login with Phone Number (A.2)
+                value:
+                  login_type: "phone_number"
+                  password_login: true
+                  phone_number: "+14155552671"
+                  password: "SecurePass123"
+              PasswordlessLogin_Email:
+                summary: Passwordless Login with Email (B.1)
+                value:
+                  login_type: "email"
+                  password_login: false
+                  email: "user@example.com"
+                  step: "send_code"
+              PasswordlessLogin_Phone:
+                summary: Passwordless Login with Phone Number (B.2)
+                value:
+                  login_type: "phone_number"
+                  password_login: false
+                  phone_number: "+14155552671"
+                  step: "send_code"
+      responses:
+        "200":
+          description: Successful login (for password login) or verification code sent (for passwordless login)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                  token:
+                    type: string
+                    description: JWT token (only for successful password login)
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        "400":
+          description: Bad request or validation error
+        "401":
+          description: Invalid credentials
+        "404":
+          description: User not found
+
+  #####################################
+  #              User
+  #####################################
+  /user/data:
+    get:
+      summary: Get user data
+      description: Fetch user information and associated addresses based on the JWT token.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        "404":
+          description: User not found
+        "500":
+          description: Server error

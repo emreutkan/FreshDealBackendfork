@@ -1,12 +1,13 @@
 import os
-
 import sqlalchemy
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify,send_from_directory
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
+from flask_swagger_ui import get_swaggerui_blueprint
 from dotenv import load_dotenv
 from models import db
 from routes import init_app
+import yaml
 
 # Load environment variables
 load_dotenv()
@@ -34,7 +35,7 @@ def create_app():
         raise SystemExit(f"Error: Missing environment variables: {', '.join(missing_vars)}")
 
     app.config['SQLALCHEMY_DATABASE_URI'] = (
-        f"mssql+pyodbc://{required_env_vars['DB_USERNAME']}:"
+        f"mssql+pyodbc://{required_env_vars['DB_USERNAME']}:" 
         f"{required_env_vars['DB_PASSWORD']}@"
         f"{required_env_vars['DB_SERVER']}/"
         f"{required_env_vars['DB_NAME']}?driver={required_env_vars['DB_DRIVER']}"
@@ -44,7 +45,6 @@ def create_app():
     ### JWT Configuration ###
     app.config['JWT_SECRET_KEY'] = required_env_vars['JWT_SECRET_KEY']
     JWTManager(app)
-
 
     db.init_app(app)  # Initialize the database
 
@@ -59,8 +59,6 @@ def create_app():
         print("Database connection successful.")
     except Exception as e:
         print(f"Error connecting to the database: {e}")
-        # Here you might want to handle the error,
-        # such as exiting the application or using a fallback configuration.
 
     init_app(app)  # Register the blueprints using the init_app function
 
@@ -74,9 +72,29 @@ def create_app():
     ### Initialize CORS ###
     CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins (adjust as needed)
 
+    ### Serve Swagger
+    ### Set up Swagger UI ###
+    SWAGGER_URL = '/swagger'
+    API_URL = '/static/swagger.yaml'
+    swaggerui_blueprint = get_swaggerui_blueprint(
+        SWAGGER_URL,  # Swagger UI endpoint
+        API_URL,  # Swagger spec URL
+        config={  # Swagger UI config overrides
+            'app_name': "ShortTermStayCompanyAPI"
+        }
+    )
+    app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+    ### Serve Swagger YAML ###
+    @app.route('/static/<path:path>')
+    def send_static(path):
+        return send_from_directory('static', path)
+    ### Home Route ###
+    @app.route('/')
+    def index():
+        return render_template('index.html')
     return app
 
 app = create_app()
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8000, debug=False)
+    app.run(host="0.0.0.0", port=8181, debug=False)
