@@ -39,5 +39,5 @@ Activate Virtual Environment
 ---
 ## Run the app 
 ```aiignore
-    python app.py
+    python app.p
 ```
