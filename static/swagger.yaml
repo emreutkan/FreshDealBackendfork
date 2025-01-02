@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: Flask API
-  description: API for managing users, authentication, and customer addresses.
+  description: API for managing users, authentication, customer addresses, and restaurants.
   version: 1.0.0
 
 servers:
@@ -43,7 +43,7 @@ components:
         role:
           type: string
           description: User's role in the system
-          enum: [user, admin, manager]
+          enum: [user, admin, manager, customer, owner]
           example: "user"
 
     # --------------------------
@@ -318,7 +318,6 @@ components:
           enum: [customer, owner]
           example: "customer"
 
-
     # --------------------------
     #      Register Response
     # --------------------------
@@ -344,6 +343,125 @@ components:
         message:
           type: string
           example: "Error message detailing what went wrong."
+
+    # --------------------------
+    #      Restaurant Schemas
+    # --------------------------
+    Restaurant:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the restaurant
+          example: 1
+        owner_id:
+          type: integer
+          description: The owner (user) ID who created this restaurant
+          example: 123
+        restaurantName:
+          type: string
+          description: Name of the restaurant
+          example: "Pizza Palace"
+        restaurantDescription:
+          type: string
+          description: Short description about the restaurant
+          example: "Authentic Italian pizzas."
+        longitude:
+          type: number
+          format: float
+          description: Geographical longitude of the restaurant
+          example: 28.97953
+        latitude:
+          type: number
+          format: float
+          description: Geographical latitude of the restaurant
+          example: 41.015137
+        category:
+          type: string
+          description: Category or cuisine type
+          example: "Italian"
+        workingDays:
+          type: array
+          description: Days of operation (converted from a comma-separated list in the database)
+          items:
+            type: string
+          example: ["Monday", "Tuesday", "Wednesday"]
+        workingHoursStart:
+          type: string
+          description: Opening hour (in HH:MM format)
+          example: "09:00"
+        workingHoursEnd:
+          type: string
+          description: Closing hour (in HH:MM format)
+          example: "22:00"
+        listings:
+          type: array
+          description: Listings or product offerings by the restaurant
+          items:
+            type: string
+          example: ["Margherita Pizza", "Pepperoni Pizza", "Garlic Bread"]
+        rating:
+          type: number
+          format: float
+          description: Current average rating for the restaurant
+          example: 4.5
+        ratingCount:
+          type: integer
+          description: Number of ratings that contribute to the average rating
+          example: 200
+
+    # For creating a Restaurant (request body), you may want to separate out required fields
+    RestaurantCreate:
+      type: object
+      required:
+        - restaurantName
+        - longitude
+        - latitude
+        - category
+        - listings
+      properties:
+        restaurantName:
+          type: string
+          description: Name of the restaurant
+          example: "Pizza Palace"
+        restaurantDescription:
+          type: string
+          description: Short description about the restaurant
+          example: "Authentic Italian pizzas."
+        longitude:
+          type: number
+          format: float
+          description: Geographical longitude of the restaurant
+          example: 28.97953
+        latitude:
+          type: number
+          format: float
+          description: Geographical latitude of the restaurant
+          example: 41.015137
+        category:
+          type: string
+          description: Category or cuisine type
+          example: "Italian"
+        workingDays:
+          type: array
+          items:
+            type: string
+          description: Days of operation
+          example: ["Monday", "Tuesday", "Wednesday"]
+        workingHoursStart:
+          type: string
+          description: Opening hour (in HH:MM format)
+          example: "09:00"
+        workingHoursEnd:
+          type: string
+          description: Closing hour (in HH:MM format)
+          example: "22:00"
+        listings:
+          type: array
+          items:
+            type: string
+          description: Menu items or offerings
+          example: ["Margherita Pizza", "Pepperoni Pizza", "Garlic Bread"]
 
 paths:
   #####################################
@@ -543,7 +661,6 @@ paths:
                   phone_number: "+14155552671"
                   password: "AnotherPass456"
                   role: "customer"
-
               RegisterWithEmailAndPhone:
                 summary: Register with Both Email and Phone Number
                 value:
@@ -552,7 +669,6 @@ paths:
                   phone_number: "+14155552672"
                   password: "StrongPass789"
                   role: "customer"
-
       responses:
         "201":
           description: User registered successfully
@@ -575,3 +691,219 @@ paths:
         "500":
           description: Server error
 
+  #####################################
+  #         Restaurant Manager
+  #####################################
+  /add_restaurant:
+    post:
+      summary: Add a new restaurant
+      description: |
+        Create a new restaurant entry for the logged-in user.
+        **Only** users with `owner` role can add a restaurant.
+      tags:
+        - Restaurant
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestaurantCreate'
+            examples:
+              example1:
+                summary: Basic Restaurant
+                value:
+                  restaurantName: "Pizza Palace"
+                  restaurantDescription: "Authentic Italian pizzas"
+                  longitude: 28.97953
+                  latitude: 41.015137
+                  category: "Italian"
+                  workingDays: ["Monday", "Tuesday"]
+                  workingHoursStart: "09:00"
+                  workingHoursEnd: "22:00"
+                  listings: ["Margherita Pizza", "Pepperoni Pizza"]
+      responses:
+        "201":
+          description: New restaurant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "New restaurant is successfully added!"
+        "400":
+          description: Validation error (e.g., missing fields, invalid role)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        "404":
+          description: Owner not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        "500":
+          description: Server error
+
+  /get_restaurant/{restaurant_id}:
+    get:
+      summary: Get a single restaurant
+      description: Retrieve a specific restaurant by its ID. Anyone can access this endpoint (no auth required).
+      tags:
+        - Restaurant
+      parameters:
+        - in: path
+          name: restaurant_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restaurant found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Restaurant'
+        "404":
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /get_restaurants:
+    get:
+      summary: Get all restaurants for the logged-in owner
+      description: |
+        Retrieves all restaurants belonging to the logged-in owner.
+        **Only** users with `owner` role can access their owned restaurants.
+      tags:
+        - Restaurant
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Restaurants retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Restaurant'
+        "400":
+          description: User is not an owner
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        "404":
+          description: No restaurant found for the owner
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /delete_restaurant/{restaurant_id}:
+    delete:
+      summary: Delete a restaurant
+      description: |
+        Remove a restaurant by its ID. Only the owner who created the restaurant can delete it.
+      tags:
+        - Restaurant
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: restaurant_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restaurant deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        "404":
+          description: Restaurant not found or user not authorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
