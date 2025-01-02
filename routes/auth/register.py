@@ -14,6 +14,12 @@ def register():
     email = data.get("email")
     phone_number = data.get("phone_number")
     password = data.get("password")
+    role = data.get("role")
+
+    if not role:
+        role = "customer"
+    elif role!="customer" and role!="owner":
+        return jsonify({"success": False, "message": "Invalid role"}), 400
 
     if not email and not phone_number:
         return jsonify({"success": False, "message": "Email or phone number is required"}), 400
@@ -42,7 +48,7 @@ def register():
             name=name_surname,
             email=email,
             password=hashed_password,
-            role='customer'
+            role=role
         )
 
     if phone_number:
@@ -61,7 +67,7 @@ def register():
             name=name_surname,
             phone_number=phone_number,
             password=hashed_password,
-            role='customer'
+            role=role
         )
 
     hashed_password = generate_password_hash(password)
@@ -73,7 +79,7 @@ def register():
             email=email,
             phone_number=phone_number,
             password=hashed_password,
-            role='customer'
+            role=role
         )
 
     db.session.add(new_user)

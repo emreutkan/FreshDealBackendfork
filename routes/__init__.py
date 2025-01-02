@@ -2,6 +2,7 @@ from flask import Blueprint
 from .auth.login import login_bp
 from .auth.register import register_bp
 from .customerAddressManager import customerAddressManager_bp
+from .restaurantManager import restaurantManager_bp
 from .user import user_bp
 def init_app(app):
     # Create a versioned API blueprint
@@ -11,6 +12,7 @@ def init_app(app):
     api_v1.register_blueprint(login_bp)
     api_v1.register_blueprint(register_bp)
     api_v1.register_blueprint(customerAddressManager_bp)
+    api_v1.register_blueprint(restaurantManager_bp)
     api_v1.register_blueprint(user_bp)
 
     # Register the versioned API blueprint with the main app
