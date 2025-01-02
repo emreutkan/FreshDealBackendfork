@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Restaurant, User
+from math import radians, cos, sin, asin, sqrt
 
 restaurantManager_bp = Blueprint("restaurantManager", __name__)
 
@@ -10,14 +11,14 @@ def add_restaurant():
     try:
         data = request.get_json()
         owner_id = get_jwt_identity()
-        restaurantName = data.get('restaurantName')
-        restaurantDescription = data.get('restaurantDescription')
+        restaurant_name = data.get('restaurantName')
+        restaurant_description = data.get('restaurantDescription')
         longitude = data.get('longitude')
         latitude = data.get('latitude')
         category = data.get('category')
-        workingDays = data.get('workingDays')
-        workingHoursStart = data.get('workingHoursStart')
-        workingHoursEnd = data.get('workingHoursEnd')
+        working_days = data.get('workingDays')
+        working_hours_start = data.get('workingHoursStart')
+        working_hours_end = data.get('workingHoursEnd')
         listings = data.get('listings')
 
         owner = User.query.get(owner_id)
@@ -28,11 +29,11 @@ def add_restaurant():
             print("Validation error: A restaurant was attempted to be added by someone who is not an owner.")
             return jsonify({"success": False, "message": "Only owners can add a restaurant"}), 400
 
-        workingDaysStr = ""
-        if workingDays:
-            workingDaysStr = ",".join(workingDays)
+        working_days_str = ""
+        if working_days:
+            working_days_str = ",".join(working_days)
 
-        if not restaurantName:
+        if not restaurant_name:
             print("Validation error: Restaurant name is missing.")
             return jsonify({"success": False, "message": "Restaurant name is required"}), 400
 
@@ -50,14 +51,14 @@ def add_restaurant():
 
         new_address = Restaurant(
             owner_id=owner_id,
-            restaurantName=restaurantName,
-            restaurantDescription=restaurantDescription,
+            restaurantName=restaurant_name,
+            restaurantDescription=restaurant_description,
             longitude=longitude,
             latitude=latitude,
             category=category,
-            workingDays=workingDaysStr,
-            workingHoursStart=workingHoursStart,
-            workingHoursEnd=workingHoursEnd,
+            workingDays=working_days_str,
+            workingHoursStart=working_hours_start,
+            workingHoursEnd=working_hours_end,
             listings=listings,
             ratingCount=0,
         )
@@ -163,6 +164,77 @@ def delete_restaurant(restaurant_id):
         db.session.commit()
 
         return jsonify({"success": True, "message": f"Restaurant with ID {restaurant_id} successfully deleted."}), 200
+
+    except Exception as e:
+        print("An error occurred:", str(e))
+        return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
+
+@restaurantManager_bp.route("/get_restaurants_proximity", methods=["POST"])
+@jwt_required()  # Optional: Remove if not requiring authentication
+def get_restaurants_proximity():
+    try:
+        data = request.get_json()
+        user_lat = data.get('latitude')
+        user_lon = data.get('longitude')
+        radius = data.get('radius', 10)  # Default radius is 10 km
+
+        # Validate input
+        if user_lat is None or user_lon is None:
+            print("Validation error: Latitude or Longitude is missing.")
+            return jsonify({"success": False, "message": "Latitude and longitude are required"}), 400
+
+        try:
+            user_lat = float(user_lat)
+            user_lon = float(user_lon)
+            radius = float(radius)
+        except ValueError:
+            print("Validation error: Invalid latitude, longitude, or radius format.")
+            return jsonify({"success": False, "message": "Invalid latitude, longitude, or radius format"}), 400
+
+        # Haversine formula to calculate distance between two points on the Earth
+        def haversine(lat1, lon1, lat2, lon2):
+            # convert decimal degrees to radians
+            lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+
+            # haversine formula
+            d_lon = lon2 - lon1
+            d_lat = lat2 - lat1
+            a = sin(d_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(d_lon / 2) ** 2
+            c = 2 * asin(sqrt(a))
+            r = 6371  # Radius of earth in kilometers
+            return c * r
+
+        # Fetch all restaurants (you can optimize this by fetching only those within a bounding box)
+        restaurants = Restaurant.query.all()
+
+        nearby_restaurants = []
+        for restaurant in restaurants:
+            distance = haversine(user_lat, user_lon, restaurant.latitude, restaurant.longitude)
+            if distance <= radius:
+                nearby_restaurants.append({
+                    "id": restaurant.id,
+                    "owner_id": restaurant.owner_id,
+                    "restaurantName": restaurant.restaurantName,
+                    "restaurantDescription": restaurant.restaurantDescription,
+                    "longitude": restaurant.longitude,
+                    "latitude": restaurant.latitude,
+                    "category": restaurant.category,
+                    "workingDays": restaurant.workingDays.split(","),
+                    "workingHoursStart": restaurant.workingHoursStart,
+                    "workingHoursEnd": restaurant.workingHoursEnd,
+                    "listings": restaurant.listings,
+                    "rating": restaurant.rating,
+                    "ratingCount": restaurant.ratingCount,
+                    "distance_km": round(distance, 2)
+                })
+
+        if not nearby_restaurants:
+            return jsonify({"message": "No restaurants found within the specified radius"}), 404
+
+        # Optionally, sort the restaurants by distance
+        nearby_restaurants.sort(key=lambda x: x['distance_km'])
+
+        return jsonify({"restaurants": nearby_restaurants}), 200
 
     except Exception as e:
         print("An error occurred:", str(e))

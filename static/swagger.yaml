@@ -395,11 +395,9 @@ components:
           description: Closing hour (in HH:MM format)
           example: "22:00"
         listings:
-          type: array
-          description: Listings or product offerings by the restaurant
-          items:
-            type: string
-          example: ["Margherita Pizza", "Pepperoni Pizza", "Garlic Bread"]
+          type: integer
+          description: ID (or count) representing the listings
+          example: 42
         rating:
           type: number
           format: float
@@ -457,82 +455,11 @@ components:
           description: Closing hour (in HH:MM format)
           example: "22:00"
         listings:
-          type: array
-          items:
-            type: string
-          description: Menu items or offerings
-          example: ["Margherita Pizza", "Pepperoni Pizza", "Garlic Bread"]
+              type: integer
+              description: ID (or count) representing the listings
+              example: 42
 
 paths:
-  #####################################
-  #            Address Paths
-  #####################################
-  /add_customer_address:
-    post:
-      summary: Add a customer address
-      description: Add a new address for the logged-in user.
-      tags:
-        - Address
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Address'
-      responses:
-        "201":
-          description: Address added
-        "400":
-          description: Validation error
-        "500":
-          description: Server error
-
-  /get_customer_address:
-    get:
-      summary: Get customer addresses
-      description: Retrieve all addresses associated with the logged-in user.
-      tags:
-        - Address
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Address'
-        "404":
-          description: No addresses found
-        "500":
-          description: Server error
-
-  /delete_customer_address/{id}:
-    delete:
-      summary: Delete a customer address
-      description: Delete an address by ID for the logged-in user.
-      tags:
-        - Address
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Address deleted
-        "404":
-          description: Address not found
-        "500":
-          description: Server error
-
   #####################################
   #           Authentication
   #####################################
@@ -609,29 +536,6 @@ paths:
           description: User not found
 
   #####################################
-  #              User
-  #####################################
-  /user/data:
-    get:
-      summary: Get user data
-      description: Fetch user information and associated addresses based on the JWT token.
-      tags:
-        - User
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserResponse'
-        "404":
-          description: User not found
-        "500":
-          description: Server error
-
-  #####################################
   #            Registration
   #####################################
   /register:
@@ -692,6 +596,98 @@ paths:
           description: Server error
 
   #####################################
+  #            Address Paths
+  #####################################
+  /add_customer_address:
+    post:
+      summary: Add a customer address
+      description: Add a new address for the logged-in user.
+      tags:
+        - Address
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Address'
+      responses:
+        "201":
+          description: Address added
+        "400":
+          description: Validation error
+        "500":
+          description: Server error
+
+  /get_customer_address:
+    get:
+      summary: Get customer addresses
+      description: Retrieve all addresses associated with the logged-in user.
+      tags:
+        - Address
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Address'
+        "404":
+          description: No addresses found
+        "500":
+          description: Server error
+
+  /delete_customer_address/{id}:
+    delete:
+      summary: Delete a customer address
+      description: Delete an address by ID for the logged-in user.
+      tags:
+        - Address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Address deleted
+        "404":
+          description: Address not found
+        "500":
+          description: Server error
+
+  #####################################
+  #              User
+  #####################################
+  /user/data:
+    get:
+      summary: Get user data
+      description: Fetch user information and associated addresses based on the JWT token.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        "404":
+          description: User not found
+        "500":
+          description: Server error
+
+  #####################################
   #         Restaurant Manager
   #####################################
   /add_restaurant:
@@ -722,7 +718,7 @@ paths:
                   workingDays: ["Monday", "Tuesday"]
                   workingHoursStart: "09:00"
                   workingHoursEnd: "22:00"
-                  listings: ["Margherita Pizza", "Pepperoni Pizza"]
+                  listings: 3
       responses:
         "201":
           description: New restaurant created
@@ -758,6 +754,169 @@ paths:
                     type: string
         "500":
           description: Server error
+
+  /get_restaurants_proximity:
+      post:
+        summary: Get restaurants within a specified proximity
+        description: |
+          Retrieve restaurants within a given radius of a specified latitude and longitude.
+          Optional authentication via JWT can be applied if needed.
+        tags:
+          - Restaurant
+        security:
+          - bearerAuth: []  # Optional: Remove this if authentication is not required
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  latitude:
+                    type: number
+                    format: float
+                    description: Latitude of the user's location
+                    example: 41.015137
+                  longitude:
+                    type: number
+                    format: float
+                    description: Longitude of the user's location
+                    example: 28.97953
+                  radius:
+                    type: number
+                    format: float
+                    description: "Radius in kilometers (default: 10)"
+                    example: 5
+                required:
+                  - latitude
+                  - longitude
+              examples:
+                example1:
+                  summary: Search within a 10 km radius
+                  value:
+                    latitude: 41.015137
+                    longitude: 28.97953
+                    radius: 10
+                example2:
+                  summary: Search within a 5 km radius
+                  value:
+                    latitude: 40.748817
+                    longitude: -73.985428
+                    radius: 5
+        responses:
+          "200":
+            description: Restaurants found within the specified radius
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    restaurants:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            description: Restaurant ID
+                            example: 1
+                          owner_id:
+                            type: integer
+                            description: Owner ID of the restaurant
+                            example: 123
+                          restaurantName:
+                            type: string
+                            description: Name of the restaurant
+                            example: "Pizza Palace"
+                          restaurantDescription:
+                            type: string
+                            description: Description of the restaurant
+                            example: "Authentic Italian pizzas."
+                          longitude:
+                            type: number
+                            format: float
+                            description: Longitude of the restaurant
+                            example: 28.97953
+                          latitude:
+                            type: number
+                            format: float
+                            description: Latitude of the restaurant
+                            example: 41.015137
+                          category:
+                            type: string
+                            description: Cuisine or category of the restaurant
+                            example: "Italian"
+                          workingDays:
+                            type: array
+                            items:
+                              type: string
+                            description: Days of operation
+                            example: ["Monday", "Tuesday"]
+                          workingHoursStart:
+                            type: string
+                            description: Opening hours
+                            example: "09:00"
+                          workingHoursEnd:
+                            type: string
+                            description: Closing hours
+                            example: "22:00"
+                          listings:
+                            type: integer
+                            description: ID or count representing the listings
+                            example: 42
+                          rating:
+                            type: number
+                            format: float
+                            description: Average rating of the restaurant
+                            example: 4.5
+                          ratingCount:
+                            type: integer
+                            description: Total number of ratings
+                            example: 200
+                          distance_km:
+                            type: number
+                            format: float
+                            description: Distance from the user location in kilometers
+                            example: 3.57
+          "400":
+            description: Validation error or missing latitude/longitude
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    success:
+                      type: boolean
+                      example: false
+                    message:
+                      type: string
+                      example: "Latitude and longitude are required"
+          "404":
+            description: No restaurants found within the specified radius
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    message:
+                      type: string
+                      example: "No restaurants found within the specified radius"
+          "500":
+            description: Internal server error
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    success:
+                      type: boolean
+                      example: false
+                    message:
+                      type: string
+                      example: "An error occurred"
+                    error:
+                      type: string
+                      example: "Error message details"
 
   /get_restaurant/{restaurant_id}:
     get:
