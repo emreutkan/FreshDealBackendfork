@@ -1,21 +1,27 @@
+import uuid
+
+from flask import Blueprint, request, jsonify, url_for, send_from_directory, current_app
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from werkzeug.utils import secure_filename
 import os
 
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Restaurant, Listing, User
-from werkzeug.utils import secure_filename
 
 listings_bp = Blueprint("listings", __name__)
 
-UPLOAD_FOLDER = './uploads'
+# Define the absolute path for the upload folder
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webm'}
+
+# Ensure the upload directory exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
+    """Check if the file has an allowed extension."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
-@listings_bp.route("/add_listing/<int:restaurant_id>", methods=["POST"])
+@listings_bp.route("/listings/add_listing/<int:restaurant_id>", methods=["POST"])
 @jwt_required()
 def add_listing(restaurant_id):
     try:
@@ -24,22 +30,20 @@ def add_listing(restaurant_id):
         owner = User.query.get(owner_id)
 
         if not owner:
-            print("Validation error: Owner not found.")
             return jsonify({"success": False, "message": "Owner not found"}), 404
 
         if owner.role != "owner":
-            print("Validation error: Only owners can add listings.")
             return jsonify({"success": False, "message": "Only owners can add listings"}), 403
 
         # Get the restaurant
         restaurant = Restaurant.query.get(restaurant_id)
 
         if not restaurant:
-            print(f"Validation error: Restaurant with ID {restaurant_id} not found.")
             return jsonify({"success": False, "message": f"Restaurant with ID {restaurant_id} not found"}), 404
 
-        if restaurant.owner_id != owner_id:
-            print("Validation error: User does not own this restaurant.")
+        if int(restaurant.owner_id) != int(owner_id):
+            print("restaurants registered owner id = ", restaurant.owner_id)
+            print("requesting owners id ", owner_id)
             return jsonify({"success": False, "message": "You do not own this restaurant"}), 403
 
         # Get form data
@@ -49,18 +53,17 @@ def add_listing(restaurant_id):
 
         # Validate required fields
         if not title or not price:
-            print("Validation error: Title or price is missing.")
             return jsonify({"success": False, "message": "Title and price are required"}), 400
 
         # Handle file upload
         file = request.files.get("image")
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            original_filename = secure_filename(file.filename)
+            unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
+            filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
             file.save(filepath)
-            image_url = filepath  # Save the file path or URL
+            image_url = url_for('api_v1.listings.get_uploaded_file', filename=unique_filename, _external=True)
         else:
-            print("Validation error: Invalid or missing image file.")
             return jsonify({"success": False, "message": "Invalid or missing image file"}), 400
 
         # Add new listing
@@ -75,9 +78,17 @@ def add_listing(restaurant_id):
         db.session.add(new_listing)
         db.session.commit()
 
-        print(f"Listing '{title}' successfully added to restaurant '{restaurant.restaurantName}'.")
         return jsonify({"success": True, "message": "Listing added successfully!", "image_url": image_url}), 201
 
     except Exception as e:
-        print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
+
+@listings_bp.route('/uploads/<filename>', methods=['GET'])
+def get_uploaded_file(filename):
+    """Serve the uploaded file securely."""
+    try:
+        # Secure the filename to prevent directory traversal
+        filename = secure_filename(filename)
+        return send_from_directory(UPLOAD_FOLDER, filename)
+    except FileNotFoundError:
+        return jsonify({"success": False, "message": "File not found"}), 404

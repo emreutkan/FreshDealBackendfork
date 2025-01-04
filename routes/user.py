@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.security import check_password_hash, generate_password_hash
 from models import db, User, CustomerAddress
 
-user_bp = Blueprint("user", _name_)
+user_bp = Blueprint("user", __name__)
 
 @user_bp.route("/user/data", methods=["GET"])
 @jwt_required()
