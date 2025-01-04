@@ -136,6 +136,68 @@ components:
             apartmentNo: 42
             doorNo: "4B"
 
+
+    # --------------------------
+    #    Listing Schema
+    # --------------------------
+    Listing:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier for the listing
+          example: 1
+        restaurant_id:
+          type: integer
+          description: ID of the associated restaurant
+          example: 5
+        title:
+          type: string
+          description: Title of the listing
+          example: "Delicious Burger"
+        description:
+          type: string
+          description: Description of the listing
+          example: "A tasty burger with fresh ingredients."
+        image_url:
+          type: string
+          format: uri
+          description: URL to the listing's image
+          example: "http://localhost:8181/v1/listings/uploads/unique_burger.jpg"
+        price:
+          type: number
+          format: float
+          description: Price of the listing
+          example: 9.99
+
+    # --------------------------
+    #        Listing Create Schema
+    # --------------------------
+    ListingCreate:
+      type: object
+      required:
+        - title
+        - price
+        - image
+      properties:
+        title:
+          type: string
+          description: Title of the listing
+          example: "Delicious Burger"
+        description:
+          type: string
+          description: Description of the listing
+          example: "A tasty burger with fresh ingredients."
+        price:
+          type: number
+          format: float
+          description: Price of the listing
+          example: 9.99
+        image:
+          type: string
+          format: binary
+          description: Image file for the listing
+
     # --------------------------
     #    Shared Login Base
     # --------------------------
@@ -515,12 +577,19 @@ paths:
                   phone_number: "+14155552671"
                   step: "send_code"
               existingInfo:
-                summary: 0000 0
+                summary: existing USER
                 value:
                   login_type: "phone_number"
                   password_login: true
                   phone_number: "0000"
                   password: "0"
+              existingOwner:
+                summary: existing Owner
+                value:
+                  login_type: "email"
+                  password_login: true
+                  email: "owner@owner.com"
+                  password: "owner"
       responses:
         "200":
           description: Successful login (for password login) or verification code sent (for passwordless login)
@@ -1062,6 +1131,237 @@ paths:
                 properties:
                   success:
                     type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+  /listings/add_listing/{restaurant_id}:
+    post:
+      summary: Add a new listing to a restaurant
+      description: |
+        Create a new listing for a specific restaurant. Only the owner of the restaurant can add listings.
+      tags:
+        - Listings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: restaurant_id
+          required: true
+          schema:
+            type: integer
+          description: ID of the restaurant to which the listing will be added
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ListingCreate'
+            encoding:
+              image:
+                contentType: ["image/png", "image/jpg", "image/jpeg", "video/webm"]
+      responses:
+        "201":
+          description: Listing added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Listing added successfully!"
+                  image_url:
+                    type: string
+                    format: uri
+                    description: URL to the uploaded image
+                    example: "http://localhost:8181/v1/listings/uploads/unique_burger.jpg"
+        "400":
+          description: Validation error or missing required fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid or missing image file"
+        "403":
+          description: Unauthorized action (e.g., user not owner)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+        "404":
+          description: Restaurant not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /listings/get_listings:
+    get:
+      summary: Get listings
+      description: |
+        Retrieve all listings or filter them by `restaurant_id`. Supports pagination.
+      tags:
+        - Listings
+      parameters:
+        - in: query
+          name: restaurant_id
+          schema:
+            type: integer
+          description: ID of the restaurant to filter listings
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            default: 10
+          description: Number of listings per page
+      responses:
+        "200":
+          description: Successfully retrieved listings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Listing'
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 50
+                      pages:
+                        type: integer
+                        example: 5
+                      current_page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 10
+                      has_next:
+                        type: boolean
+                        example: true
+                      has_prev:
+                        type: boolean
+                        example: false
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "An error occurred while fetching listings"
+                  error:
+                    type: string
+
+  #####################################
+  #            File Uploads
+  #####################################
+  /listings/uploads/{filename}:
+    get:
+      summary: Get uploaded file
+      description: Retrieve an uploaded image or video file by filename.
+      tags:
+        - Listings
+      parameters:
+        - in: path
+          name: filename
+          required: true
+          schema:
+            type: string
+          description: Name of the file to retrieve
+      responses:
+        "200":
+          description: File retrieved successfully
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            video/webm:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: File not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
                   message:
                     type: string
                   error:
