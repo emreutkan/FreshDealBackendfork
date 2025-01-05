@@ -81,7 +81,7 @@ def create_app():
         SWAGGER_URL,  # Swagger UI endpoint
         API_URL,  # Swagger spec URL
         config={  # Swagger UI config overrides
-            'app_name': "ShortTermStayCompanyAPI"
+            'app_name': "FreshDeal API"
         }
     )
     app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
