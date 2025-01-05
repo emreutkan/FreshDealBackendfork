@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-  title: Flask API
+  title: Freshdeal API
   description: API for managing users, authentication, customer addresses, and restaurants.
   version: 1.0.0
 
