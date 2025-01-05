@@ -1,3 +1,5 @@
+# models.py
+
 from . import db
 from sqlalchemy import Integer, String, DECIMAL
 from sqlalchemy.orm import validates
@@ -22,6 +24,8 @@ class Restaurant(db.Model):
 
     rating = db.Column(DECIMAL(3,2), nullable=True)
     ratingCount = db.Column(Integer, nullable=False, default=0)
+
+    image_url = db.Column(String(2083), nullable=True)  # URL for the restaurant image
 
     @validates('workingDays')
     def validate_working_days(self, key, workingDays):

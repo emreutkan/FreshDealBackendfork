@@ -136,7 +136,6 @@ components:
             apartmentNo: 42
             doorNo: "4B"
 
-
     # --------------------------
     #    Listing Schema
     # --------------------------
@@ -458,7 +457,7 @@ components:
           example: "22:00"
         listings:
           type: integer
-          description: ID (or count) representing the listings
+          description: Count representing the listings
           example: 42
         rating:
           type: number
@@ -469,8 +468,15 @@ components:
           type: integer
           description: Number of ratings that contribute to the average rating
           example: 200
+        image_url:
+          type: string
+          format: uri
+          description: URL to the restaurant's image
+          example: "http://localhost:8181/v1/uploads/unique_restaurant.jpg"
 
-    # For creating a Restaurant (request body), you may want to separate out required fields
+    # --------------------------
+    #    Restaurant Create Schema
+    # --------------------------
     RestaurantCreate:
       type: object
       required:
@@ -517,9 +523,31 @@ components:
           description: Closing hour (in HH:MM format)
           example: "22:00"
         listings:
-              type: integer
-              description: ID (or count) representing the listings
-              example: 42
+          type: integer
+          description: Count representing the listings
+          example: 42
+        image:
+          type: string
+          format: binary
+          description: Image file for the restaurant (optional)
+
+    # --------------------------
+    #    Restaurant Create Response Schema
+    # --------------------------
+    RestaurantCreateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "New restaurant is successfully added!"
+        image_url:
+          type: string
+          format: uri
+          description: URL to the uploaded image
+          example: "http://localhost:8181/v1/uploads/unique_restaurant.jpg"
 
 paths:
   #####################################
@@ -772,12 +800,15 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/RestaurantCreate'
+            encoding:
+              image:
+                contentType: ["image/png", "image/jpg", "image/jpeg", "video/webm"]
             examples:
               example1:
-                summary: Basic Restaurant
+                summary: Basic Restaurant with Image
                 value:
                   restaurantName: "Pizza Palace"
                   restaurantDescription: "Authentic Italian pizzas"
@@ -788,19 +819,27 @@ paths:
                   workingHoursStart: "09:00"
                   workingHoursEnd: "22:00"
                   listings: 3
+                  image: "@/path/to/image.jpg"  # Indicate file upload
       responses:
         "201":
           description: New restaurant created
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "New restaurant is successfully added!"
+                $ref: '#/components/schemas/RestaurantCreateResponse'
         "400":
           description: Validation error (e.g., missing fields, invalid role)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        "403":
+          description: Unauthorized action (e.g., user not owner)
           content:
             application/json:
               schema:
@@ -823,169 +862,185 @@ paths:
                     type: string
         "500":
           description: Server error
-
-  /get_restaurants_proximity:
-      post:
-        summary: Get restaurants within a specified proximity
-        description: |
-          Retrieve restaurants within a given radius of a specified latitude and longitude.
-          Optional authentication via JWT can be applied if needed.
-        tags:
-          - Restaurant
-        security:
-          - bearerAuth: []  # Optional: Remove this if authentication is not required
-        requestBody:
-          required: true
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  latitude:
-                    type: number
-                    format: float
-                    description: Latitude of the user's location
-                    example: 41.015137
-                  longitude:
-                    type: number
-                    format: float
-                    description: Longitude of the user's location
-                    example: 28.97953
-                  radius:
-                    type: number
-                    format: float
-                    description: "Radius in kilometers (default: 10)"
-                    example: 5
-                required:
-                  - latitude
-                  - longitude
-              examples:
-                example1:
-                  summary: Search within a 10 km radius
-                  value:
-                    latitude: 41.015137
-                    longitude: 28.97953
-                    radius: 10
-                example2:
-                  summary: Search within a 5 km radius
-                  value:
-                    latitude: 40.748817
-                    longitude: -73.985428
-                    radius: 5
-        responses:
-          "200":
-            description: Restaurants found within the specified radius
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    restaurants:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          id:
-                            type: integer
-                            description: Restaurant ID
-                            example: 1
-                          owner_id:
-                            type: integer
-                            description: Owner ID of the restaurant
-                            example: 123
-                          restaurantName:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /get_restaurants_proximity:
+    post:
+      summary: Get restaurants within a specified proximity
+      description: |
+        Retrieve restaurants within a given radius of a specified latitude and longitude.
+        Optional authentication via JWT can be applied if needed.
+      tags:
+        - Restaurant
+      security:
+        - bearerAuth: []  # Optional: Remove this if authentication is not required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                  format: float
+                  description: Latitude of the user's location
+                  example: 41.015137
+                longitude:
+                  type: number
+                  format: float
+                  description: Longitude of the user's location
+                  example: 28.97953
+                radius:
+                  type: number
+                  format: float
+                  description: "Radius in kilometers (default: 10)"
+                  example: 5
+              required:
+                - latitude
+                - longitude
+            examples:
+              example1:
+                summary: Search within a 10 km radius
+                value:
+                  latitude: 41.015137
+                  longitude: 28.97953
+                  radius: 10
+              example2:
+                summary: Search within a 5 km radius
+                value:
+                  latitude: 40.748817
+                  longitude: -73.985428
+                  radius: 5
+      responses:
+        "200":
+          description: Restaurants found within the specified radius
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restaurants:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          description: Restaurant ID
+                          example: 1
+                        owner_id:
+                          type: integer
+                          description: Owner ID of the restaurant
+                          example: 123
+                        restaurantName:
+                          type: string
+                          description: Name of the restaurant
+                          example: "Pizza Palace"
+                        restaurantDescription:
+                          type: string
+                          description: Description of the restaurant
+                          example: "Authentic Italian pizzas."
+                        longitude:
+                          type: number
+                          format: float
+                          description: Longitude of the restaurant
+                          example: 28.97953
+                        latitude:
+                          type: number
+                          format: float
+                          description: Latitude of the restaurant
+                          example: 41.015137
+                        category:
+                          type: string
+                          description: Cuisine or category of the restaurant
+                          example: "Italian"
+                        workingDays:
+                          type: array
+                          items:
                             type: string
-                            description: Name of the restaurant
-                            example: "Pizza Palace"
-                          restaurantDescription:
-                            type: string
-                            description: Description of the restaurant
-                            example: "Authentic Italian pizzas."
-                          longitude:
-                            type: number
-                            format: float
-                            description: Longitude of the restaurant
-                            example: 28.97953
-                          latitude:
-                            type: number
-                            format: float
-                            description: Latitude of the restaurant
-                            example: 41.015137
-                          category:
-                            type: string
-                            description: Cuisine or category of the restaurant
-                            example: "Italian"
-                          workingDays:
-                            type: array
-                            items:
-                              type: string
-                            description: Days of operation
-                            example: ["Monday", "Tuesday"]
-                          workingHoursStart:
-                            type: string
-                            description: Opening hours
-                            example: "09:00"
-                          workingHoursEnd:
-                            type: string
-                            description: Closing hours
-                            example: "22:00"
-                          listings:
-                            type: integer
-                            description: ID or count representing the listings
-                            example: 42
-                          rating:
-                            type: number
-                            format: float
-                            description: Average rating of the restaurant
-                            example: 4.5
-                          ratingCount:
-                            type: integer
-                            description: Total number of ratings
-                            example: 200
-                          distance_km:
-                            type: number
-                            format: float
-                            description: Distance from the user location in kilometers
-                            example: 3.57
-          "400":
-            description: Validation error or missing latitude/longitude
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    success:
-                      type: boolean
-                      example: false
-                    message:
-                      type: string
-                      example: "Latitude and longitude are required"
-          "404":
-            description: No restaurants found within the specified radius
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    message:
-                      type: string
-                      example: "No restaurants found within the specified radius"
-          "500":
-            description: Internal server error
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    success:
-                      type: boolean
-                      example: false
-                    message:
-                      type: string
-                      example: "An error occurred"
-                    error:
-                      type: string
-                      example: "Error message details"
+                          description: Days of operation
+                          example: ["Monday", "Tuesday"]
+                        workingHoursStart:
+                          type: string
+                          description: Opening hours
+                          example: "09:00"
+                        workingHoursEnd:
+                          type: string
+                          description: Closing hours
+                          example: "22:00"
+                        listings:
+                          type: integer
+                          description: Count representing the listings
+                          example: 42
+                        rating:
+                          type: number
+                          format: float
+                          description: Average rating of the restaurant
+                          example: 4.5
+                        ratingCount:
+                          type: integer
+                          description: Total number of ratings
+                          example: 200
+                        image_url:
+                          type: string
+                          format: uri
+                          description: URL to the restaurant's image
+                          example: "http://localhost:8181/v1/uploads/unique_restaurant.jpg"
+                        distance_km:
+                          type: number
+                          format: float
+                          description: Distance from the user location in kilometers
+                          example: 3.57
+        "400":
+          description: Validation error or missing latitude/longitude
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Latitude and longitude are required"
+        "404":
+          description: No restaurants found within the specified radius
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "No restaurants found within the specified radius"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "An error occurred"
+                  error:
+                    type: string
+                    example: "Error message details"
 
   /get_restaurant/{restaurant_id}:
     get:
@@ -999,6 +1054,7 @@ paths:
           required: true
           schema:
             type: integer
+          description: ID of the restaurant to retrieve
       responses:
         "200":
           description: Restaurant found
@@ -1135,6 +1191,7 @@ paths:
                     type: string
                   error:
                     type: string
+
   /listings/add_listing/{restaurant_id}:
     post:
       summary: Add a new listing to a restaurant
@@ -1311,7 +1368,7 @@ paths:
   #####################################
   #            File Uploads
   #####################################
-  /listings/uploads/{filename}:
+  /uploads/{filename}:
     get:
       summary: Get uploaded file
       description: Retrieve an uploaded image or video file by filename.
@@ -1366,3 +1423,6 @@ paths:
                     type: string
                   error:
                     type: string
+
+security:
+  - bearerAuth: []

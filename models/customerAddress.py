@@ -1,5 +1,5 @@
 from . import db
-from sqlalchemy import Integer, String, DECIMAL, CheckConstraint
+from sqlalchemy import Integer, String, DECIMAL, Boolean, CheckConstraint
 
 class CustomerAddress(db.Model):
     __tablename__ = 'customerAddresses'
@@ -16,3 +16,4 @@ class CustomerAddress(db.Model):
     postalCode = db.Column(Integer, nullable=True)
     apartmentNo = db.Column(Integer, nullable=True)
     doorNo = db.Column(String(6), nullable=True)
+    is_primary = db.Column(Boolean, nullable=False, default=False)
