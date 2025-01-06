@@ -20,7 +20,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def allowed_file(filename):
     """Check if the file has an allowed extension."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 @listings_bp.route("/listings/add_listing/<int:restaurant_id>", methods=["POST"])
 @jwt_required()
 def add_listing(restaurant_id):
@@ -42,18 +41,25 @@ def add_listing(restaurant_id):
             return jsonify({"success": False, "message": f"Restaurant with ID {restaurant_id} not found"}), 404
 
         if int(restaurant.owner_id) != int(owner_id):
-            print("restaurants registered owner id = ", restaurant.owner_id)
-            print("requesting owners id ", owner_id)
             return jsonify({"success": False, "message": "You do not own this restaurant"}), 403
 
         # Get form data
         title = request.form.get("title")
         description = request.form.get("description", "")
         price = request.form.get("price")
+        count = request.form.get("count", 1)
 
         # Validate required fields
         if not title or not price:
             return jsonify({"success": False, "message": "Title and price are required"}), 400
+
+        # Validate count
+        try:
+            count = int(count)
+            if count <= 0:
+                return jsonify({"success": False, "message": "Count must be a positive integer"}), 400
+        except ValueError:
+            return jsonify({"success": False, "message": "Count must be an integer"}), 400
 
         # Handle file upload
         file = request.files.get("image")
@@ -72,7 +78,8 @@ def add_listing(restaurant_id):
             title=title,
             description=description,
             image_url=image_url,
-            price=float(price)
+            price=float(price),
+            count=count
         )
 
         db.session.add(new_listing)
@@ -100,21 +107,16 @@ def get_listings():
         restaurant_id = request.args.get('restaurant_id', type=int)
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
-
         # Build the base query
         query = Listing.query
-
         # Apply filter if restaurant_id is provided
         if restaurant_id:
             query = query.filter_by(restaurant_id=restaurant_id)
-
         # Apply an ORDER BY clause (required for MSSQL)
         query = query.order_by(Listing.id.asc())  # Adjust to a relevant column if needed
-
         # Apply pagination
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         listings = pagination.items
-
         # Serialize listings
         listings_data = []
         for listing in listings:
@@ -124,17 +126,16 @@ def get_listings():
                 image_url = url_for('api_v1.listings.get_uploaded_file', filename=filename, _external=True)
             else:
                 image_url = None
-
             listing_data = {
                 "id": listing.id,
                 "restaurant_id": listing.restaurant_id,
                 "title": listing.title,
                 "description": listing.description,
                 "image_url": image_url,
-                "price": float(listing.price)
+                "price": float(listing.price),
+                "count": listing.count  # Include the count field
             }
             listings_data.append(listing_data)
-
         # Prepare response with pagination info
         response = {
             "success": True,
@@ -148,8 +149,62 @@ def get_listings():
                 "has_prev": pagination.has_prev
             }
         }
-
         return jsonify(response), 200
-
     except Exception as e:
         return jsonify({"success": False, "message": "An error occurred while fetching listings", "error": str(e)}), 500
+
+
+@listings_bp.route("/search", methods=["GET"])
+def search():
+    try:
+        # Get search parameters
+        search_type = request.args.get("type")  # 'restaurant' or 'listing'
+        query = request.args.get("query", "").strip()
+        restaurant_id = request.args.get("restaurant_id", type=int)
+
+        if not query:
+            return jsonify({"success": False, "message": "Query parameter is required"}), 400
+
+        if search_type == "restaurant":
+            # Search restaurants by name
+            results = Restaurant.query.filter(Restaurant.restaurantName.ilike(f"%{query}%")).all()
+            data = [
+                {
+                    "id": restaurant.id,
+                    "name": restaurant.restaurantName,
+                    "description": restaurant.restaurantDescription,
+                    "image_url": restaurant.image_url,
+                    "rating": float(restaurant.rating) if restaurant.rating else None,
+                    "category": restaurant.category,
+                }
+                for restaurant in results
+            ]
+            return jsonify({"success": True, "type": "restaurant", "results": data}), 200
+
+        elif search_type == "listing":
+            if not restaurant_id:
+                return jsonify({"success": False, "message": "Restaurant ID is required for listing search"}), 400
+
+            # Search listings by title within a specific restaurant
+            results = Listing.query.filter(
+                Listing.restaurant_id == restaurant_id, Listing.title.ilike(f"%{query}%")
+            ).all()
+            data = [
+                {
+                    "id": listing.id,
+                    "restaurant_id": listing.restaurant_id,
+                    "title": listing.title,
+                    "description": listing.description,
+                    "image_url": listing.image_url,
+                    "price": float(listing.price),
+                    "count": listing.count,
+                }
+                for listing in results
+            ]
+            return jsonify({"success": True, "type": "listing", "results": data}), 200
+
+        else:
+            return jsonify({"success": False, "message": "Invalid search type. Use 'restaurant' or 'listing'"}), 400
+
+    except Exception as e:
+        return jsonify({"success": False, "message": "An error occurred while performing search", "error": str(e)}), 500
