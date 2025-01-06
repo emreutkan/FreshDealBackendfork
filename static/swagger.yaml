@@ -168,6 +168,10 @@ components:
           format: float
           description: Price of the listing
           example: 9.99
+        count:
+          type: integer
+          description: Quantity available or in stock for the listing
+          example: 10
 
     # --------------------------
     #   Listing Create Schema
@@ -196,6 +200,10 @@ components:
           type: string
           format: binary
           description: Image file for the listing
+        count:
+          type: integer
+          description: Quantity available or in stock for the listing
+          example: 5
 
     # --------------------------
     #   CartItem Schema
@@ -1975,6 +1983,121 @@ paths:
                     type: boolean
                   message:
                     type: string
+                  error:
+                    type: string
+
+  #####################################
+  #             Search
+  #####################################
+  /search:
+    get:
+      summary: Search restaurants or listings
+      description: >
+        Depending on the `type` query parameter, this endpoint can:
+        
+        - **Search for restaurants** by name (when `type=restaurant`)
+        - **Search for listings** by title within a specific restaurant (when `type=listing`, requires `restaurant_id`)
+
+      tags:
+        - Search
+      parameters:
+        - in: query
+          name: type
+          description: The search type (restaurant or listing)
+          required: true
+          schema:
+            type: string
+            enum: [restaurant, listing]
+        - in: query
+          name: query
+          description: The search keyword or partial match
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: restaurant_id
+          description: Required if `type=listing`
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  type:
+                    type: string
+                    example: "restaurant"
+                  results:
+                    type: array
+                    description: Search results (restaurants or listings)
+                    items:
+                      type: object
+                      properties:
+                        # For "restaurant" results
+                        id:
+                          type: integer
+                          example: 1
+                        name:
+                          type: string
+                          example: "Pizza Palace"
+                        description:
+                          type: string
+                          example: "Authentic Italian pizzas."
+                        image_url:
+                          type: string
+                          format: uri
+                          example: "http://localhost:8181/v1/uploads/unique_restaurant.jpg"
+                        rating:
+                          type: number
+                          example: 4.5
+                        category:
+                          type: string
+                          example: "Italian"
+                        # For "listing" results
+                        restaurant_id:
+                          type: integer
+                          example: 123
+                        title:
+                          type: string
+                          example: "Margherita Pizza"
+                        price:
+                          type: number
+                          example: 12.99
+                        count:
+                          type: integer
+                          example: 5
+        "400":
+          description: Invalid request (e.g. missing query parameters)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Query parameter is required or invalid search type"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "An error occurred while performing search"
                   error:
                     type: string
 
