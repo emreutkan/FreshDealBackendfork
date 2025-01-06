@@ -132,3 +132,51 @@ def delete_customer_address(id):
     db.session.commit()
 
     return jsonify({"message": "Address successfully deleted!"}), 200
+
+
+## todo add to swagger
+@customerAddressManager_bp.route("/update_customer_address/<int:id>", methods=["PUT"])
+@jwt_required()
+def update_customer_address(id):
+    try:
+        user_id = get_jwt_identity()
+        address = CustomerAddress.query.filter_by(id=id, user_id=user_id).first()
+
+        if not address:
+            return jsonify({"message": "Address not found or does not belong to the user"}), 404
+
+        # Get data from request
+        data = request.get_json()
+
+        # Update fields if provided
+        address.title = data.get('title', address.title)
+        address.longitude = data.get('longitude', address.longitude)
+        address.latitude = data.get('latitude', address.latitude)
+        address.street = data.get('street', address.street)
+        address.neighborhood = data.get('neighborhood', address.neighborhood)
+        address.district = data.get('district', address.district)
+        address.province = data.get('province', address.province)
+        address.country = data.get('country', address.country)
+        address.postalCode = data.get('postalCode', address.postalCode)
+        address.apartmentNo = data.get('apartmentNo', address.apartmentNo)
+        address.doorNo = data.get('doorNo', address.doorNo)
+
+        db.session.commit()
+
+        # Serialize updated address
+        serialized_address = address.to_dict()
+
+        return jsonify({
+            "success": True,
+            "message": "Address updated successfully!",
+            "address": serialized_address
+        }), 200
+
+    except Exception as e:
+        # Log unexpected errors
+        print("An error occurred:", str(e))
+        return jsonify({
+            "success": False,
+            "message": "An error occurred while updating the address.",
+            "error": str(e)
+        }), 500

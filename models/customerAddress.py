@@ -33,5 +33,6 @@ class CustomerAddress(db.Model):
             "country": self.country,
             "postalCode": self.postalCode,
             "apartmentNo": self.apartmentNo,
-            "doorNo": self.doorNo
+            "doorNo": self.doorNo,
+            "is_primary": self.is_primary
         }
