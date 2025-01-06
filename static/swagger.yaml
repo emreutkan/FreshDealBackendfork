@@ -168,9 +168,13 @@ components:
           format: float
           description: Price of the listing
           example: 9.99
+        count:
+          type: integer
+          description: Quantity available or in stock for the listing
+          example: 10
 
     # --------------------------
-    #        Listing Create Schema
+    #   Listing Create Schema
     # --------------------------
     ListingCreate:
       type: object
@@ -196,6 +200,43 @@ components:
           type: string
           format: binary
           description: Image file for the listing
+        count:
+          type: integer
+          description: Quantity available or in stock for the listing
+          example: 5
+
+    # --------------------------
+    #   CartItem Schema
+    # --------------------------
+    CartItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique cart item identifier
+          example: 10
+        listing_id:
+          type: integer
+          description: The ID of the associated listing
+          example: 1
+        title:
+          type: string
+          description: Title of the listing
+          example: "Delicious Burger"
+        price:
+          type: number
+          format: float
+          description: Price of a single item
+          example: 9.99
+        count:
+          type: integer
+          description: Quantity of this item
+          example: 2
+        added_at:
+          type: string
+          format: date-time
+          description: Timestamp when item was added to the cart
+          example: "2023-08-17T12:34:56"
 
     # --------------------------
     #    Shared Login Base
@@ -474,9 +515,6 @@ components:
           description: URL to the restaurant's image
           example: "http://localhost:8181/v1/uploads/unique_restaurant.jpg"
 
-    # --------------------------
-    #    Restaurant Create Schema
-    # --------------------------
     RestaurantCreate:
       type: object
       required:
@@ -784,6 +822,334 @@ paths:
         "500":
           description: Server error
 
+  /update_password:
+    post:
+      summary: Update user password
+      description: |
+        Allows the user to change their password if the old password is verified.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old_password:
+                  type: string
+                  format: password
+                  description: Old password
+                  example: "CurrentPass123"
+                new_password:
+                  type: string
+                  format: password
+                  description: New password
+                  example: "NewSecurePass456"
+      responses:
+        "200":
+          description: Password updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password updated successfully"
+        "400":
+          description: Old password is incorrect
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Old password is incorrect"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /update_username:
+    post:
+      summary: Update user name
+      description: |
+        Allows the user to change their username (full name).
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: New username (full name)
+                  example: "Johnny Appleseed"
+      responses:
+        "200":
+          description: Username updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Username updated successfully"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "User not found"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /update_email:
+    post:
+      summary: Update user email
+      description: |
+        Allows the user to change their email if the old email matches the database record.
+        A mock verification email is then sent to the new address.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old_email:
+                  type: string
+                  format: email
+                  description: The current (old) email to verify
+                  example: "old@example.com"
+                new_email:
+                  type: string
+                  format: email
+                  description: The new email address to update to
+                  example: "new@example.com"
+      responses:
+        "200":
+          description: Email updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Email updated successfully"
+        "400":
+          description: Old email is incorrect
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Old email is incorrect"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /favorites:
+    post:
+      summary: Add a restaurant to favorites
+      description: |
+        Adds a restaurant to the authenticated user's favorites.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                restaurant_id:
+                  type: integer
+                  description: ID of the restaurant to add to favorites
+                  example: 42
+      responses:
+        "201":
+          description: Restaurant added to favorites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Restaurant added to favorites"
+        "400":
+          description: Restaurant already in favorites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Restaurant is already in your favorites"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+    delete:
+      summary: Remove a restaurant from favorites
+      description: |
+        Removes a restaurant from the authenticated user's favorites.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                restaurant_id:
+                  type: integer
+                  description: ID of the restaurant to remove from favorites
+                  example: 42
+      responses:
+        "200":
+          description: Restaurant removed from favorites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Restaurant removed from favorites"
+        "404":
+          description: Favorite not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Favorite not found"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+    get:
+      summary: Get user favorites
+      description: |
+        Retrieves a list of the user's favorite restaurants.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successfully retrieved user favorites (may be an empty list)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  favorites:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        restaurant_id:
+                          type: integer
+                          example: 42
+                        restaurant_name:
+                          type: string
+                          example: "Pizza Palace"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
   #####################################
   #         Restaurant Manager
   #####################################
@@ -806,20 +1172,6 @@ paths:
             encoding:
               image:
                 contentType: ["image/png", "image/jpg", "image/jpeg", "video/webm"]
-            examples:
-              example1:
-                summary: Basic Restaurant with Image
-                value:
-                  restaurantName: "Pizza Palace"
-                  restaurantDescription: "Authentic Italian pizzas"
-                  longitude: 28.97953
-                  latitude: 41.015137
-                  category: "Italian"
-                  workingDays: ["Monday", "Tuesday"]
-                  workingHoursStart: "09:00"
-                  workingHoursEnd: "22:00"
-                  listings: 3
-                  image: "@/path/to/image.jpg"  # Indicate file upload
       responses:
         "201":
           description: New restaurant created
@@ -1421,6 +1773,331 @@ paths:
                     example: false
                   message:
                     type: string
+                  error:
+                    type: string
+
+  #####################################
+  #              Cart
+  #####################################
+  /cart:
+    get:
+      summary: Get cart items
+      description: Fetch the current user's cart items.
+      tags:
+        - Cart
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current cart items retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CartItem'
+        "500":
+          description: An error occurred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /cart/add:
+    post:
+      summary: Add an item to the cart
+      description: Add or increment a listing in the user's cart.
+      tags:
+        - Cart
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                listing_id:
+                  type: integer
+                  description: ID of the listing to add
+                  example: 1
+                count:
+                  type: integer
+                  description: Number of items to add
+                  example: 2
+      responses:
+        "201":
+          description: Item added to cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Item added to cart"
+        "404":
+          description: Listing not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Listing not found"
+        "500":
+          description: An error occurred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /cart/remove:
+    delete:
+      summary: Remove an item from the cart
+      description: Remove a listing from the user's cart completely.
+      tags:
+        - Cart
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                listing_id:
+                  type: integer
+                  description: ID of the listing to remove
+                  example: 1
+      responses:
+        "200":
+          description: Item removed from cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Item removed from cart"
+        "404":
+          description: Item not found in cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Item not found in cart"
+        "500":
+          description: An error occurred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /cart/update:
+    put:
+      summary: Update the quantity of an item in the cart
+      description: Modify the count of a specific listing in the user's cart.
+      tags:
+        - Cart
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                listing_id:
+                  type: integer
+                  description: ID of the listing to update
+                  example: 1
+                count:
+                  type: integer
+                  description: New quantity for this listing
+                  example: 3
+      responses:
+        "200":
+          description: Cart item updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Cart item updated"
+        "404":
+          description: Item not found in cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Item not found in cart"
+        "500":
+          description: An error occurred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  #####################################
+  #             Search
+  #####################################
+  /search:
+    get:
+      summary: Search restaurants or listings
+      description: >
+        Depending on the `type` query parameter, this endpoint can:
+        
+        - **Search for restaurants** by name (when `type=restaurant`)
+        - **Search for listings** by title within a specific restaurant (when `type=listing`, requires `restaurant_id`)
+
+      tags:
+        - Search
+      parameters:
+        - in: query
+          name: type
+          description: The search type (restaurant or listing)
+          required: true
+          schema:
+            type: string
+            enum: [restaurant, listing]
+        - in: query
+          name: query
+          description: The search keyword or partial match
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: restaurant_id
+          description: Required if `type=listing`
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  type:
+                    type: string
+                    example: "restaurant"
+                  results:
+                    type: array
+                    description: Search results (restaurants or listings)
+                    items:
+                      type: object
+                      properties:
+                        # For "restaurant" results
+                        id:
+                          type: integer
+                          example: 1
+                        name:
+                          type: string
+                          example: "Pizza Palace"
+                        description:
+                          type: string
+                          example: "Authentic Italian pizzas."
+                        image_url:
+                          type: string
+                          format: uri
+                          example: "http://localhost:8181/v1/uploads/unique_restaurant.jpg"
+                        rating:
+                          type: number
+                          example: 4.5
+                        category:
+                          type: string
+                          example: "Italian"
+                        # For "listing" results
+                        restaurant_id:
+                          type: integer
+                          example: 123
+                        title:
+                          type: string
+                          example: "Margherita Pizza"
+                        price:
+                          type: number
+                          example: 12.99
+                        count:
+                          type: integer
+                          example: 5
+        "400":
+          description: Invalid request (e.g. missing query parameters)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Query parameter is required or invalid search type"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "An error occurred while performing search"
                   error:
                     type: string
 

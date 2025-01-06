@@ -9,3 +9,4 @@ class Listing(db.Model):
     description = db.Column(String(1000), nullable=True)
     image_url = db.Column(String(2083), nullable=True)  # URL for the image
     price = db.Column(DECIMAL(10, 2), nullable=False)
+    count = db.Column(Integer, nullable=False, default=1)  # Default count set to 1
