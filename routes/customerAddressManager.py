@@ -110,9 +110,11 @@ def get_customer_address():
         "country": address.country,
         "postalCode": address.postalCode,
         "apartmentNo": address.apartmentNo,
-        "doorNo": address.doorNo
+        "doorNo": address.doorNo,
+        "is_primary": address.is_primary
+
         })
-        return jsonify(serialized_address), 200
+    return jsonify(serialized_address), 200
 
 @customerAddressManager_bp.route("/delete_customer_address/<int:id>", methods=["DELETE"])
 @jwt_required()
