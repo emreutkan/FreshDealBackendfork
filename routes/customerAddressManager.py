@@ -4,15 +4,6 @@ from models import db, CustomerAddress
 
 customerAddressManager_bp = Blueprint("customerAddressManager", __name__)
 
-# routes.py or wherever your blueprint is defined
-
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from your_app import db  # Adjust the import based on your project structure
-from your_app.models import CustomerAddress  # Adjust the import based on your project structure
-
-customerAddressManager_bp = Blueprint('customerAddressManager', __name__)
-
 
 @customerAddressManager_bp.route("/add_customer_address", methods=["POST"])
 @jwt_required()
