@@ -784,6 +784,334 @@ paths:
         "500":
           description: Server error
 
+  /update_password:
+    post:
+      summary: Update user password
+      description: |
+        Allows the user to change their password if the old password is verified.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old_password:
+                  type: string
+                  format: password
+                  description: Old password
+                  example: "CurrentPass123"
+                new_password:
+                  type: string
+                  format: password
+                  description: New password
+                  example: "NewSecurePass456"
+      responses:
+        "200":
+          description: Password updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password updated successfully"
+        "400":
+          description: Old password is incorrect
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Old password is incorrect"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /update_username:
+    post:
+      summary: Update user name
+      description: |
+        Allows the user to change their username (full name).
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: New username (full name)
+                  example: "Johnny Appleseed"
+      responses:
+        "200":
+          description: Username updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Username updated successfully"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "User not found"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /update_email:
+    post:
+      summary: Update user email
+      description: |
+        Allows the user to change their email if the old email matches the database record.
+        A mock verification email is then sent to the new address.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                old_email:
+                  type: string
+                  format: email
+                  description: The current (old) email to verify
+                  example: "old@example.com"
+                new_email:
+                  type: string
+                  format: email
+                  description: The new email address to update to
+                  example: "new@example.com"
+      responses:
+        "200":
+          description: Email updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Email updated successfully"
+        "400":
+          description: Old email is incorrect
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Old email is incorrect"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /favorites:
+    post:
+      summary: Add a restaurant to favorites
+      description: |
+        Adds a restaurant to the authenticated user's favorites.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                restaurant_id:
+                  type: integer
+                  description: ID of the restaurant to add to favorites
+                  example: 42
+      responses:
+        "201":
+          description: Restaurant added to favorites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Restaurant added to favorites"
+        "400":
+          description: Restaurant already in favorites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Restaurant is already in your favorites"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+    delete:
+      summary: Remove a restaurant from favorites
+      description: |
+        Removes a restaurant from the authenticated user's favorites.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                restaurant_id:
+                  type: integer
+                  description: ID of the restaurant to remove from favorites
+                  example: 42
+      responses:
+        "200":
+          description: Restaurant removed from favorites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Restaurant removed from favorites"
+        "404":
+          description: Favorite not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Favorite not found"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+    get:
+      summary: Get user favorites
+      description: |
+        Retrieves a list of the user's favorite restaurants.
+      tags:
+        - User
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successfully retrieved user favorites (may be an empty list)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  favorites:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        restaurant_id:
+                          type: integer
+                          example: 42
+                        restaurant_name:
+                          type: string
+                          example: "Pizza Palace"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  error:
+                    type: string
+
   #####################################
   #         Restaurant Manager
   #####################################
