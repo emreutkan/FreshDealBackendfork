@@ -20,7 +20,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def allowed_file(filename):
     """Check if the file has an allowed extension."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 @listings_bp.route("/listings/add_listing/<int:restaurant_id>", methods=["POST"])
 @jwt_required()
 def add_listing(restaurant_id):
@@ -42,18 +41,25 @@ def add_listing(restaurant_id):
             return jsonify({"success": False, "message": f"Restaurant with ID {restaurant_id} not found"}), 404
 
         if int(restaurant.owner_id) != int(owner_id):
-            print("restaurants registered owner id = ", restaurant.owner_id)
-            print("requesting owners id ", owner_id)
             return jsonify({"success": False, "message": "You do not own this restaurant"}), 403
 
         # Get form data
         title = request.form.get("title")
         description = request.form.get("description", "")
         price = request.form.get("price")
+        count = request.form.get("count", 1)
 
         # Validate required fields
         if not title or not price:
             return jsonify({"success": False, "message": "Title and price are required"}), 400
+
+        # Validate count
+        try:
+            count = int(count)
+            if count <= 0:
+                return jsonify({"success": False, "message": "Count must be a positive integer"}), 400
+        except ValueError:
+            return jsonify({"success": False, "message": "Count must be an integer"}), 400
 
         # Handle file upload
         file = request.files.get("image")
@@ -72,7 +78,8 @@ def add_listing(restaurant_id):
             title=title,
             description=description,
             image_url=image_url,
-            price=float(price)
+            price=float(price),
+            count=count
         )
 
         db.session.add(new_listing)
@@ -92,3 +99,56 @@ def get_uploaded_file(filename):
         return send_from_directory(UPLOAD_FOLDER, filename)
     except FileNotFoundError:
         return jsonify({"success": False, "message": "File not found"}), 404
+
+@listings_bp.route("/listings/get_listings", methods=["GET"])
+def get_listings():
+    try:
+        # Get query parameters for filtering and pagination
+        restaurant_id = request.args.get('restaurant_id', type=int)
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        # Build the base query
+        query = Listing.query
+        # Apply filter if restaurant_id is provided
+        if restaurant_id:
+            query = query.filter_by(restaurant_id=restaurant_id)
+        # Apply an ORDER BY clause (required for MSSQL)
+        query = query.order_by(Listing.id.asc())  # Adjust to a relevant column if needed
+        # Apply pagination
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        listings = pagination.items
+        # Serialize listings
+        listings_data = []
+        for listing in listings:
+            # Extract the filename from image_url
+            if listing.image_url:
+                filename = os.path.basename(listing.image_url)
+                image_url = url_for('api_v1.listings.get_uploaded_file', filename=filename, _external=True)
+            else:
+                image_url = None
+            listing_data = {
+                "id": listing.id,
+                "restaurant_id": listing.restaurant_id,
+                "title": listing.title,
+                "description": listing.description,
+                "image_url": image_url,
+                "price": float(listing.price),
+                "count": listing.count  # Include the count field
+            }
+            listings_data.append(listing_data)
+        # Prepare response with pagination info
+        response = {
+            "success": True,
+            "data": listings_data,
+            "pagination": {
+                "total": pagination.total,
+                "pages": pagination.pages,
+                "current_page": pagination.page,
+                "per_page": pagination.per_page,
+                "has_next": pagination.has_next,
+                "has_prev": pagination.has_prev
+            }
+        }
+        return jsonify(response), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": "An error occurred while fetching listings", "error": str(e)}), 500
