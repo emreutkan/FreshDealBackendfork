@@ -15,10 +15,6 @@ load_dotenv()
 def create_app():
     app = Flask(__name__)
 
-    @app.route('/ping', methods=['GET'])
-    def ping():
-        return "Pong", 200
-
     ### Database Configuration ###
     required_env_vars = {
         "DB_SERVER": os.getenv("DB_SERVER"), # test
@@ -62,13 +58,6 @@ def create_app():
         print(f"Error connecting to the database: {e}")
 
     init_app(app)  # Register the blueprints using the init_app function
-
-    @app.route('/recreate_tables', methods=['POST'])
-    def recreate_tables():
-        with app.app_context():
-            db.drop_all()
-            db.create_all()
-            return "All tables recreated!", 200
 
     ### Initialize CORS ###
     CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins (adjust as needed)
