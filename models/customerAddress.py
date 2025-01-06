@@ -24,8 +24,8 @@ class CustomerAddress(db.Model):
             "id": str(self.id),  # Ensure id is a string if frontend expects it
             "user_id": self.user_id,
             "title": self.title,
-            "longitude": self.longitude,
-            "latitude": self.latitude,
+            "longitude": float(self.longitude),
+            "latitude": float(self.latitude),
             "street": self.street,
             "neighborhood": self.neighborhood,
             "district": self.district,
