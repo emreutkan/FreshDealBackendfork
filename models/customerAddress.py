@@ -17,3 +17,21 @@ class CustomerAddress(db.Model):
     apartmentNo = db.Column(Integer, nullable=True)
     doorNo = db.Column(String(6), nullable=True)
     is_primary = db.Column(Boolean, nullable=False, default=False)
+
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),  # Ensure id is a string if frontend expects it
+            "user_id": self.user_id,
+            "title": self.title,
+            "longitude": self.longitude,
+            "latitude": self.latitude,
+            "street": self.street,
+            "neighborhood": self.neighborhood,
+            "district": self.district,
+            "province": self.province,
+            "country": self.country,
+            "postalCode": self.postalCode,
+            "apartmentNo": self.apartmentNo,
+            "doorNo": self.doorNo
+        }
