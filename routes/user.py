@@ -44,6 +44,7 @@ def get_user_data():
                 "postalCode": addr.postalCode,
                 "apartmentNo": addr.apartmentNo,
                 "doorNo": addr.doorNo,
+                "is_primary": addr.is_primary,
             }
             for addr in user_addresses
         ]

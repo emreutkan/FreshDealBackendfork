@@ -49,8 +49,9 @@ def add_customer_address():
 
         # Set all other addresses to is_primary = False
         CustomerAddress.query.filter_by(user_id=user_id).update({"is_primary": False})
+        existing_addresses = CustomerAddress.query.filter_by(user_id=user_id).first()
+        is_first_address = existing_addresses is None
 
-        # Create new address with is_primary = True
         new_address = CustomerAddress(
             user_id=user_id,
             title=title,
@@ -64,7 +65,7 @@ def add_customer_address():
             postalCode=postalCode,
             apartmentNo=apartmentNo,
             doorNo=doorNo,
-            is_primary=True  # Default to True for new address
+            is_primary=is_first_address  # True only if it's the first address
         )
         db.session.add(new_address)
         db.session.commit()
@@ -171,7 +172,6 @@ def update_customer_address(id):
                 address.is_primary = False
 
         db.session.commit()
-
         # Serialize updated address
         serialized_address = address.to_dict()
 
