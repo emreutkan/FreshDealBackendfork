@@ -1,4 +1,3 @@
-# mail_logic.py
 from azure.communication.email import EmailClient
 from dotenv import load_dotenv
 import os
@@ -6,7 +5,6 @@ import os
 # Load environment variables
 load_dotenv()
 
-# Immutable sender email
 SENDER_EMAIL_ADDRESS = "DoNotReply@f8652524-c674-48ac-9648-4d601d0d4c3d.azurecomm.net"
 
 def send_email(recipient_address, subject, message):
@@ -32,6 +30,10 @@ def send_email(recipient_address, subject, message):
         poller = client.begin_send(email_message)
         result = poller.result()
 
-        print("Message sent successfully:", result.message_id)
+        # Log the appropriate result details
+        if isinstance(result, dict) and "messageId" in result:
+            print("Message sent successfully, Message ID:", result["messageId"])
+        else:
+            print("Message sent successfully, Response Details:", result)
     except Exception as ex:
         print("Error occurred while sending email:", ex)
