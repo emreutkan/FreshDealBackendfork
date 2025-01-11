@@ -77,9 +77,3 @@ def send_email(recipient_address, subject, verification_code):
         print("Error occurred while sending email:", e)
 
 
-# Example usage
-if __name__ == "__main__":
-    recipient = "irfanemreutkan@outlook.com"
-    subject = "Your FreshDeal Verification Code"
-    verification_code = "123456"
-    send_email(recipient, subject, verification_code)
