@@ -1,8 +1,7 @@
-# models.py
-
 from . import db
-from sqlalchemy import Integer, String, DECIMAL
-from sqlalchemy.orm import validates
+from sqlalchemy import Integer, String, DECIMAL, Boolean, Float
+from sqlalchemy.orm import validates, relationship
+
 
 class Restaurant(db.Model):
     __tablename__ = 'restaurants'
@@ -21,11 +20,19 @@ class Restaurant(db.Model):
     workingHoursEnd = db.Column(String(5), nullable=True)
 
     listings = db.Column(Integer, nullable=False, default=0)
-
-    rating = db.Column(DECIMAL(3,2), nullable=True)
+    rating = db.Column(DECIMAL(3, 2), nullable=True)
     ratingCount = db.Column(Integer, nullable=False, default=0)
 
-    image_url = db.Column(String(2083), nullable=True)  # URL for the restaurant image
+    image_url = db.Column(String(2083), nullable=True)
+
+    pickup = db.Column(Boolean, nullable=False, default=False)
+    delivery = db.Column(Boolean, nullable=False, default=False)
+
+    maxDeliveryDistance = db.Column(Float, nullable=True)  # Radius in kilometers
+    deliveryFee = db.Column(DECIMAL(10, 2), nullable=True)
+    minOrderAmount = db.Column(DECIMAL(10, 2), nullable=True)
+
+    comments = relationship("RestaurantComment", back_populates="restaurant", cascade="all, delete-orphan")
 
     @validates('workingDays')
     def validate_working_days(self, key, workingDays):
@@ -53,3 +60,13 @@ class Restaurant(db.Model):
         if rating is not None and not (0 <= rating <= 5):
             raise ValueError("Rating must be between 0.00 and 5.00.")
         return rating
+
+    def update_rating(self, new_rating):
+        """Update the restaurant's average rating and rating count."""
+        if self.rating is None:
+            self.rating = new_rating
+            self.ratingCount = 1
+        else:
+            total_rating = self.rating * self.ratingCount
+            self.ratingCount += 1
+            self.rating = (total_rating + new_rating) / self.ratingCount

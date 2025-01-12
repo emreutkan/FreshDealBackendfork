@@ -177,8 +177,8 @@ def get_user_favorites_route():
     try:
         user_id = get_jwt_identity()
         favorites = get_favorites(user_id)
+        # Correct jsonify usage
         return jsonify({"favorites": favorites}), 200
 
     except Exception as e:
-        print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500

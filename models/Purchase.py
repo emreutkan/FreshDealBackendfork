@@ -14,6 +14,6 @@ class Purchase(db.Model):
     purchase_date = db.Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships
-    user = relationship('User', back_populates='purchases')  # Use correct class name and matching back_populates
-    listing = relationship('Listing', back_populates='purchases')  # Fix back_populates if needed
-    comment = relationship('Comment', uselist=False, back_populates='purchase')  # Use correct class name
+    user = relationship('User', back_populates='purchases')
+    listing = relationship('Listing', back_populates='purchases')
+    restaurant_comment = relationship('RestaurantComment', uselist=False, back_populates='purchase')

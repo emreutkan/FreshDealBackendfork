@@ -155,6 +155,7 @@ def remove_favorite(user_id, restaurant_id):
     logger.info(f"Restaurant_id: {restaurant_id} removed from favorites for user_id: {user_id}")
     return True, "Restaurant removed from favorites"
 
+
 def get_favorites(user_id):
     """
     Get a list of the user's favorite restaurants.
@@ -165,15 +166,12 @@ def get_favorites(user_id):
         logger.info(f"No favorites found for user_id: {user_id}")
         return []
 
-    favorite_restaurants = [
-        {
-            "restaurant_id": favorite.restaurant_id,
-            "restaurant_name": favorite.restaurant.restaurantName,
-        }
-        for favorite in favorites
-    ]
+    # Corrected line
+    favorite_restaurants = [favorite.restaurant_id for favorite in favorites]
+
     logger.info(f"Favorites for user_id {user_id}: {favorite_restaurants}")
     return favorite_restaurants
+
 
 def authenticate_user(email=None, phone_number=None, password=None):
     """

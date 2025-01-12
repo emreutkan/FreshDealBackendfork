@@ -9,4 +9,4 @@ from .listings import Listing
 from .userFavorites import UserFavorites
 from .userCart import UserCart
 from .Purchase import Purchase
-from .Comment import Comment
+from .restaurantComments import RestaurantComment

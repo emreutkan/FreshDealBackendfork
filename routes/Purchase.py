@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Listing, Purchase, Comment
+from models import db, Listing, Purchase, restaurantComments
 
 purchase_bp = Blueprint("purchase", __name__)
 
@@ -59,7 +59,7 @@ def add_comment(purchase_id):
             return jsonify({"success": False, "message": "Comment already exists for this purchase"}), 400
 
         # Create and save comment
-        comment = Comment(purchase_id=purchase_id, comment_text=comment_text, rating=rating)
+        comment = restaurantComments(purchase_id=purchase_id, comment_text=comment_text, rating=rating)
         db.session.add(comment)
         db.session.commit()
 

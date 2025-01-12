@@ -16,3 +16,4 @@ class User(db.Model):
         CheckConstraint("role IN ('customer', 'owner')", name='role_check'),
     )
     purchases = relationship('Purchase', back_populates='user')  # Use correct class name
+    comments = relationship('RestaurantComment', back_populates='user')  # Add this line
