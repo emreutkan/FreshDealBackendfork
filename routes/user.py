@@ -1,68 +1,40 @@
+# routes/user_routes.py
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from werkzeug.security import check_password_hash, generate_password_hash
-from models import db, User, CustomerAddress, UserFavorites
+from services.user_services import (
+    fetch_user_data,
+    change_password,
+    change_username,
+    change_email,
+    add_favorite,
+    remove_favorite,
+    get_favorites
+)
 
 user_bp = Blueprint("user", __name__)
 
 @user_bp.route("/user/data", methods=["GET"])
 @jwt_required()
-def get_user_data():
+def get_user_data_route():
     """
     Fetch user information and their associated addresses based on the JWT token.
     """
     try:
-        # Get user_id from the JWT token
         user_id = get_jwt_identity()
+        data, error = fetch_user_data(user_id)
+        if error:
+            return jsonify({"message": error}), 404 if error == "User not found" else 400
 
-        # Fetch user details
-        user = User.query.filter_by(id=user_id).first()
-        if not user:
-            return jsonify({"message": "User not found"}), 404
-
-        user_data = {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "phone_number": user.phone_number,
-            "role": user.role
-        }
-
-        # Fetch user addresses
-        user_addresses = CustomerAddress.query.filter_by(user_id=user_id).all()
-        user_address_list = [
-            {
-                "id": addr.id,
-                "title": addr.title,
-                "longitude": float(addr.longitude),
-                "latitude": float(addr.latitude),
-                "street": addr.street,
-                "neighborhood": addr.neighborhood,
-                "district": addr.district,
-                "province": addr.province,
-                "country": addr.country,
-                "postalCode": addr.postalCode,
-                "apartmentNo": addr.apartmentNo,
-                "doorNo": addr.doorNo,
-                "is_primary": addr.is_primary,
-            }
-            for addr in user_addresses
-        ]
-
-        # Return combined data
-        return jsonify({
-            "user_data": user_data,
-            "user_address_list": user_address_list
-        }), 200
+        return jsonify(data), 200
 
     except Exception as e:
-        # Log and return an error response for unexpected exceptions
         print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
 
 @user_bp.route("/update_password", methods=["POST"])
 @jwt_required()
-def update_password():
+def update_password_route():
     """
     Update the user's password if the old password matches.
     """
@@ -71,25 +43,23 @@ def update_password():
         old_password = data.get("old_password")
         new_password = data.get("new_password")
 
+        if not old_password or not new_password:
+            return jsonify({"message": "Old and new passwords are required"}), 400
+
         user_id = get_jwt_identity()
-        user = User.query.filter_by(id=user_id).first()
+        success, message = change_password(user_id, old_password, new_password)
+        if not success:
+            return jsonify({"message": message}), 400
 
-        if not user or not check_password_hash(user.password, old_password):
-            return jsonify({"message": "Old password is incorrect"}), 400
-
-        user.password = generate_password_hash(new_password)
-        db.session.commit()
-
-        return jsonify({"message": "Password updated successfully"}), 200
+        return jsonify({"message": message}), 200
 
     except Exception as e:
         print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
 
-
 @user_bp.route("/update_username", methods=["POST"])
 @jwt_required()
-def update_username():
+def update_username_route():
     """
     Update the user's username.
     """
@@ -97,25 +67,31 @@ def update_username():
         data = request.get_json()
         new_username = data.get("username")
 
+        if not new_username:
+            return jsonify({"message": "New username is required"}), 400
+
         user_id = get_jwt_identity()
-        user = User.query.filter_by(id=user_id).first()
+        success, message = change_username(user_id, new_username)
+        if not success:
+            return jsonify({"message": message}), 404
 
-        if not user:
-            return jsonify({"message": "User not found"}), 404
-
-        user.name = new_username
-        db.session.commit()
-
-        return jsonify({"message": "Username updated successfully"}), 200
+        return jsonify({"message": message}), 200
 
     except Exception as e:
         print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
+import re
 
+def is_valid_email(email):
+    """
+    Validates an email address using a regex pattern.
+    """
+    email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return re.match(email_regex, email) is not None
 
 @user_bp.route("/update_email", methods=["POST"])
 @jwt_required()
-def update_email():
+def update_email_route():
     """
     Update the user's email and send a mock verification email.
     """
@@ -124,32 +100,29 @@ def update_email():
         old_email = data.get("old_email")
         new_email = data.get("new_email")
 
+        if not old_email or not new_email:
+            return jsonify({"message": "Old and new emails are required"}), 400
+
+        # Validate email formats
+        if not is_valid_email(old_email):
+            return jsonify({"message": "Invalid old email format"}), 400
+        if not is_valid_email(new_email):
+            return jsonify({"message": "Invalid new email format"}), 400
+
         user_id = get_jwt_identity()
-        user = User.query.filter_by(id=user_id).first()
+        success, message = change_email(user_id, old_email, new_email)
+        if not success:
+            return jsonify({"message": message}), 400
 
-        if not user or user.email != old_email:
-            return jsonify({"message": "Old email is incorrect"}), 400
-
-        user.email = new_email
-        db.session.commit()
-
-        send_verification_email(new_email)
-
-        return jsonify({"message": "Email updated successfully"}), 200
+        return jsonify({"message": message}), 200
 
     except Exception as e:
         print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
 
-def send_verification_email(email):
-    """
-    Mock function to simulate sending a verification email.
-    """
-    print(f"Verification email sent to {email}")
-
 @user_bp.route("/favorites", methods=["POST"])
 @jwt_required()
-def add_to_favorites():
+def add_to_favorites_route():
     """
     Add a restaurant to the user's favorites.
     """
@@ -157,28 +130,23 @@ def add_to_favorites():
         data = request.get_json()
         restaurant_id = data.get("restaurant_id")
 
+        if not restaurant_id:
+            return jsonify({"message": "Restaurant ID is required"}), 400
+
         user_id = get_jwt_identity()
+        success, message = add_favorite(user_id, restaurant_id)
+        if not success:
+            return jsonify({"message": message}), 400
 
-        # Check if the favorite already exists
-        existing_favorite = UserFavorites.query.filter_by(user_id=user_id, restaurant_id=restaurant_id).first()
-        if existing_favorite:
-            return jsonify({"message": "Restaurant is already in your favorites"}), 400
-
-        # Add favorite
-        favorite = UserFavorites(user_id=user_id, restaurant_id=restaurant_id)
-        db.session.add(favorite)
-        db.session.commit()
-
-        return jsonify({"message": "Restaurant added to favorites"}), 201
+        return jsonify({"message": message}), 201
 
     except Exception as e:
         print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
 
-
 @user_bp.route("/favorites", methods=["DELETE"])
 @jwt_required()
-def remove_from_favorites():
+def remove_from_favorites_route():
     """
     Remove a restaurant from the user's favorites.
     """
@@ -186,47 +154,31 @@ def remove_from_favorites():
         data = request.get_json()
         restaurant_id = data.get("restaurant_id")
 
+        if not restaurant_id:
+            return jsonify({"message": "Restaurant ID is required"}), 400
+
         user_id = get_jwt_identity()
+        success, message = remove_favorite(user_id, restaurant_id)
+        if not success:
+            return jsonify({"message": message}), 404
 
-        # Find and remove favorite
-        favorite = UserFavorites.query.filter_by(user_id=user_id, restaurant_id=restaurant_id).first()
-        if not favorite:
-            return jsonify({"message": "Favorite not found"}), 404
-
-        db.session.delete(favorite)
-        db.session.commit()
-
-        return jsonify({"message": "Restaurant removed from favorites"}), 200
+        return jsonify({"message": message}), 200
 
     except Exception as e:
         print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
 
-
 @user_bp.route("/favorites", methods=["GET"])
 @jwt_required()
-def get_user_favorites():
+def get_user_favorites_route():
     """
     Get a list of the user's favorite restaurants.
     """
     try:
         user_id = get_jwt_identity()
-
-        # Fetch user's favorites
-        favorites = UserFavorites.query.filter_by(user_id=user_id).all()
-        if not favorites:
-            return jsonify({"favorites": []}), 200
-
-        favorite_restaurants = [
-            {
-                "restaurant_id": favorite.restaurant_id,
-                "restaurant_name": favorite.restaurant.restaurantName,
-            }
-            for favorite in favorites
-        ]
-
-        return jsonify({"favorites": favorite_restaurants}), 200
+        favorites = get_favorites(user_id)
+        # Correct jsonify usage
+        return jsonify({"favorites": favorites}), 200
 
     except Exception as e:
-        print("An error occurred:", str(e))
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500

@@ -8,3 +8,5 @@ from .restaurant import Restaurant
 from .listings import Listing
 from .userFavorites import UserFavorites
 from .userCart import UserCart
+from .Purchase import Purchase
+from .restaurantComments import RestaurantComment

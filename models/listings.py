@@ -1,3 +1,5 @@
+from sqlalchemy.orm import relationship
+
 from . import db
 from sqlalchemy import Integer, String, Float, ForeignKey, DECIMAL
 
@@ -10,3 +12,5 @@ class Listing(db.Model):
     image_url = db.Column(String(2083), nullable=True)  # URL for the image
     price = db.Column(DECIMAL(10, 2), nullable=False)
     count = db.Column(Integer, nullable=False, default=1)  # Default count set to 1
+
+    purchases = relationship('Purchase', back_populates='listing')  # Ensure correct back_populates match
