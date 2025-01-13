@@ -1,6 +1,6 @@
 import os
 import sqlalchemy
-from flask import Flask
+from flask import Flask, redirect
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -32,7 +32,6 @@ def create_app():
         f"{required_env_vars['DB_SERVER']}/"
         f"{required_env_vars['DB_NAME']}?driver={required_env_vars['DB_DRIVER']}"
     )
-    # Note: This line appears to override the previous setting; adjust as needed.
     # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1:3306/freshdeallocal'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
@@ -102,6 +101,10 @@ def create_app():
     }
 
     Swagger(app, config=swagger_config)
+
+    @app.route('/')
+    def redirect_to_swagger():
+        return redirect('/swagger')
 
     return app
 
