@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Listing, Purchase, restaurantComments
+from app.models import db, Listing, Purchase
 
 purchase_bp = Blueprint("purchase", __name__)
 

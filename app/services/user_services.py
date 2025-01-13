@@ -3,7 +3,7 @@
 import logging
 import coloredlogs
 from werkzeug.security import check_password_hash, generate_password_hash
-from models import db, User, CustomerAddress, UserFavorites
+from app.models import db, User, CustomerAddress, UserFavorites
 
 # Configure the logger
 logger = logging.getLogger(__name__)

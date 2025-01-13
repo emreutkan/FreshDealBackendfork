@@ -1,21 +1,21 @@
 from flask import Blueprint
 
-from .auth_routes import auth_bp
-from .customerAddressManager import customerAddressManager_bp
-from .restaurantManager import restaurantManager_bp
-from .user import user_bp
-from .listings import listings_bp
-from .cart import cart_bp
-from .search import search_bp
-from .Purchase import purchase_bp
+from app.routes.auth_routes import auth_bp
+from app.routes.address_routes import addresses_bp
+from app.routes.restaurant_routes import restaurant_bp
+from app.routes.user_routes import user_bp
+from app.routes.listing_routes import listings_bp
+from app.routes.cart_routes import cart_bp
+from app.routes.search_routes import search_bp
+from app.routes.purchase_routes import purchase_bp
 def init_app(app):
     # Create a versioned API blueprint
     api_v1 = Blueprint('api_v1', __name__, url_prefix='/v1')
 
     # Register all version 1 blueprints under the API v1 blueprint
     api_v1.register_blueprint(auth_bp)
-    api_v1.register_blueprint(customerAddressManager_bp)
-    api_v1.register_blueprint(restaurantManager_bp)
+    api_v1.register_blueprint(addresses_bp)
+    api_v1.register_blueprint(restaurant_bp)
     api_v1.register_blueprint(user_bp)
     api_v1.register_blueprint(listings_bp)
     api_v1.register_blueprint(cart_bp)
