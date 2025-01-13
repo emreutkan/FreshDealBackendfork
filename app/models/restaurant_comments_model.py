@@ -1,6 +1,6 @@
 from . import db
-from sqlalchemy import Integer, String, DECIMAL, Boolean, Float, ForeignKey
-from sqlalchemy.orm import validates, relationship
+from sqlalchemy import Integer, String, DECIMAL, ForeignKey
+from sqlalchemy.orm import relationship
 
 
 

@@ -3,7 +3,7 @@ import os
 from flask import Blueprint, request, jsonify, url_for, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
-from app.services import (
+from app.services.restaurant_service import (
     create_restaurant_service,
     get_restaurants_service,
     get_restaurant_service,

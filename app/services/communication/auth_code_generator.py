@@ -18,12 +18,13 @@ def set_verification_code():
 
 
 def check_rate_limit_ip(ip_address):
+    # noinspection GrazieInspection
     """
-    Check and update rate limits for the given IP address.
+        Check and update rate limits for the given IP address.
 
-    Returns:
-        (bool, str): (Success status, Message)
-    """
+        Returns:
+            (bool, str): (Success status, Message)
+        """
     if not ip_address:
         return True, ""
 
@@ -42,12 +43,13 @@ def check_rate_limit_ip(ip_address):
 
 
 def check_rate_limit_email(email):
+    # noinspection GrazieInspection
     """
-    Check and update rate limits for the given email address.
+        Check and update rate limits for the given email address.
 
-    Returns:
-        (bool, str): (Success status, Message)
-    """
+        Returns:
+            (bool, str): (Success status, Message)
+        """
     if not email:
         return True, ""
 
@@ -66,12 +68,13 @@ def check_rate_limit_email(email):
 
 
 def check_rate_limit_phone(phone_number):
+    # noinspection GrazieInspection
     """
-    Check and update rate limits for the given phone number.
+        Check and update rate limits for the given phone number.
 
-    Returns:
-        (bool, str): (Success status, Message)
-    """
+        Returns:
+            (bool, str): (Success status, Message)
+        """
     if not phone_number:
         return True, ""
 
@@ -99,8 +102,8 @@ def store_verification_code(identifier, code, expiry=10 * 60):
 
     Parameters:
         identifier (str): The unique identifier (email or phone number).
-        code (str): The verification code.
-        expiry (int): Time in seconds before the code expires.
+        Code (str): The verification code.
+        Expiry (int): Time in seconds before the code expires.
     """
     expiration_time = time.time() + expiry
     VERIFICATION_CODES[identifier] = {'code': code, 'expires_at': expiration_time}
@@ -167,7 +170,7 @@ def verify_code(identifier, provided_code):
 
     Parameters:
         identifier (str): The unique identifier (email or phone number).
-        provided_code (str): The code provided by the user.
+        Provided_code (str): The code provided by the user.
 
     Returns:
         bool: True if the code is valid, False otherwise.

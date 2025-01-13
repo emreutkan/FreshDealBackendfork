@@ -5,7 +5,7 @@ from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from dotenv import load_dotenv
 from app.models import db
-from routes import init_app
+from app.routes import init_app
 from flasgger import Swagger
 
 load_dotenv()
@@ -33,7 +33,7 @@ def create_app():
         f"{required_env_vars['DB_NAME']}?driver={required_env_vars['DB_DRIVER']}"
     )
     # Note: This line appears to override the previous setting; adjust as needed.
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1:3306/freshdeallocal'
+    # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1:3306/freshdeallocal'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
 
@@ -108,4 +108,4 @@ def create_app():
 app = create_app()
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8181, debug=False)
+    app.run(host="0.0.0.0", port=8000, debug=False)

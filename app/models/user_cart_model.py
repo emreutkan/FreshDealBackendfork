@@ -1,5 +1,5 @@
 from . import db
-from sqlalchemy import Integer, String, ForeignKey, DateTime, func
+from sqlalchemy import Integer, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
 
 class UserCart(db.Model):

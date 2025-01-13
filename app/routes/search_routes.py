@@ -36,7 +36,7 @@ def search():
         schema:
           type: integer
         description: Required for search type "listing".
-    responses:
+    Responses:
       200:
         description: Search results returned successfully.
         content:

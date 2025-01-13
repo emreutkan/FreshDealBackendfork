@@ -1,7 +1,7 @@
 # routes/cart_routes.py
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.services import (
+from app.services.cart_service import (
     get_cart_items_service,
     add_to_cart_service,
     update_cart_item_service,
@@ -185,7 +185,7 @@ def update_cart_item():
 @jwt_required()
 def remove_from_cart(listing_id):
     """
-    Remove an item from the user's cart.
+    remove an item from the user's cart.
     ---
     tags:
       - Cart

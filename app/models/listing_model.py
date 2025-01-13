@@ -1,7 +1,7 @@
 from sqlalchemy.orm import relationship
 
 from . import db
-from sqlalchemy import Integer, String, Float, ForeignKey, DECIMAL
+from sqlalchemy import Integer, String, ForeignKey, DECIMAL
 
 class Listing(db.Model):
     __tablename__ = 'listings'

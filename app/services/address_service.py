@@ -12,9 +12,9 @@ def create_address(user_id, data):
     district = data.get('district')
     province = data.get('province')
     country = data.get('country')
-    postalCode = data.get('postalCode')
-    apartmentNo = data.get('apartmentNo')
-    doorNo = data.get('doorNo')
+    postal_code = data.get('postalCode')
+    apartment_no = data.get('apartmentNo')
+    door_no = data.get('doorNo')
 
     # Validation
     if not title:
@@ -35,7 +35,7 @@ def create_address(user_id, data):
     if not country:
         return {"success": False, "message": "Country is required"}, 400
 
-    if not postalCode:
+    if not postal_code:
         return {"success": False, "message": "Postal Code is required"}, 400
 
     # Check if this is the user's first address
@@ -56,9 +56,9 @@ def create_address(user_id, data):
         district=district,
         province=province,
         country=country,
-        postalCode=postalCode,
-        apartmentNo=apartmentNo,
-        doorNo=doorNo,
+        postalCode=postal_code,
+        apartmentNo=apartment_no,
+        doorNo=door_no,
         is_primary=is_first_address  # Set to True if it's the first address
     )
     db.session.add(new_address)

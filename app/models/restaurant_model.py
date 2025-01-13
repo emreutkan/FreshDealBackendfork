@@ -35,14 +35,14 @@ class Restaurant(db.Model):
     comments = relationship("RestaurantComment", back_populates="restaurant", cascade="all, delete-orphan")
 
     @validates('workingDays')
-    def validate_working_days(self, key, workingDays):
+    def validate_working_days(self, key, working_days):
         valid_days = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'}
-        days_list = workingDays.split(',')
+        days_list = working_days.split(',')
 
         if not all(day in valid_days for day in days_list):
             raise ValueError(f"Working days must be one of {', '.join(valid_days)}")
 
-        return workingDays
+        return working_days
 
     @validates('workingHoursStart', 'workingHoursEnd')
     def validate_working_hours(self, key, value):

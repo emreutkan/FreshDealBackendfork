@@ -25,7 +25,7 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
     :param files: The files (request.files).
     :param url_for_func: The url_for function to build URLs.
 
-    :return: tuple (response dict, HTTP status code)
+    :return: Tuple (response dict, HTTP status code)
     """
     # Retrieve owner’s information should be done in routes.
     restaurant_name = form.get('restaurantName')
@@ -36,12 +36,12 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
     working_hours_start = form.get('workingHoursStart')
     working_hours_end = form.get('workingHoursEnd')
     listings = form.get('listings', 0)
+    working_days = form.getlist('workingDays')
     pickup = form.get('pickup', 'false').lower() == 'true'
     delivery = form.get('delivery', 'false').lower() == 'true'
-    max_delivery_distance = form.get('maxDeliveryDistance')
     delivery_fee = form.get('deliveryFee')
     min_order_amount = form.get('minOrderAmount')
-    working_days = form.getlist('workingDays')
+    max_delivery_distance = form.get('maxDeliveryDistance')
 
     # Validate required fields.
     if not restaurant_name:

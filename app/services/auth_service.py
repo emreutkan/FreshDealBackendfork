@@ -80,7 +80,7 @@ def login_user(data, client_ip):
 
     if step not in ["send_code", "verify_code", "skip_verification"]:
         logger.info(f"Invalid step provided: {step}")
-        return ({"success": False, "message": "Invalid step"}, 400)
+        return {"success": False, "message": "Invalid step"}, 400
 
     # Retrieve the user according to login type
     user = None
@@ -91,19 +91,19 @@ def login_user(data, client_ip):
 
     if not user:
         logger.info(f"User not found for {login_type}: {email or phone_number}")
-        return ({"success": False, "message": "User not found"}, 404)
+        return {"success": False, "message": "User not found"}, 404
 
     if step == "skip_verification":
         if not password:
             logger.info("Password missing for password login.")
-            return ({"success": False, "message": "Password is required for login."}, 400)
+            return {"success": False, "message": "Password is required for login."}, 400
         if check_password_hash(user.password, password):
             token = create_access_token(identity=str(user.id))
             logger.info(f"User_id {user.id} authenticated successfully with password.")
-            return ({"success": True, "token": token}, 200)
+            return {"success": True, "token": token}, 200
         else:
             logger.info(f"Incorrect password for user_id: {user.id}")
-            return ({"success": False, "message": "Wrong password"}, 400)
+            return {"success": False, "message": "Wrong password"}, 400
     elif step == "send_code":
         success, code_or_message = generate_verification_code(ip=client_ip, login_type=login_type)
         if success:
@@ -128,7 +128,7 @@ def login_user(data, client_ip):
                     }, 400)
     # You could later add "verify_code" step here.
     logger.info("Failed to process login step.")
-    return ({"success": False, "message": "Failed to process login."}, 400)
+    return {"success": False, "message": "Failed to process login."}, 400
 
 
 def register_user(data):
@@ -149,19 +149,19 @@ def register_user(data):
 
     if role not in ["customer", "owner"]:
         logger.info(f"Invalid role: {role}")
-        return ({"success": False, "message": "Invalid role"}, 400)
+        return {"success": False, "message": "Invalid role"}, 400
 
     if not email and not phone_number:
         logger.info("Registration attempt missing email or phone number")
-        return ({"success": False, "message": "Email or phone number is required"}, 400)
+        return {"success": False, "message": "Email or phone number is required"}, 400
 
     if not password:
         logger.info("Registration attempt missing password")
-        return ({"success": False, "message": "Password is required"}, 400)
+        return {"success": False, "message": "Password is required"}, 400
 
     if not name_surname:
         logger.info("Registration attempt missing name.")
-        return ({"success": False, "message": "Name is required"}, 400)
+        return {"success": False, "message": "Name is required"}, 400
 
     new_user = User(name=name_surname, role=role)
 
@@ -171,10 +171,10 @@ def register_user(data):
             validate_email(email)
         except EmailNotValidError as e:
             logger.info(f"Invalid email provided: {email} - {str(e)}")
-            return ({"success": False, "message": str(e)}, 400)
+            return {"success": False, "message": str(e)}, 400
         if get_user_by_email(email=email):
             logger.info(f"Email already exists: {email}")
-            return ({"success": False, "message": "Email already exists"}, 409)
+            return {"success": False, "message": "Email already exists"}, 409
         new_user.email = email
         new_user.email_verified = False
 
@@ -184,13 +184,13 @@ def register_user(data):
             parsed_number = phonenumbers.parse(phone_number)
             if not is_valid_number(parsed_number):
                 logger.info(f"Invalid phone number: {phone_number}")
-                return ({"success": False, "message": "Invalid phone number"}, 400)
+                return {"success": False, "message": "Invalid phone number"}, 400
         except NumberParseException:
             logger.info(f"Invalid phone number format: {phone_number}")
-            return ({"success": False, "message": "Invalid phone number format"}, 400)
+            return {"success": False, "message": "Invalid phone number format"}, 400
         if get_user_by_phone(phone_number=phone_number):
             logger.info(f"Phone number already exists: {phone_number}")
-            return ({"success": False, "message": "Phone number already exists"}, 409)
+            return {"success": False, "message": "Phone number already exists"}, 409
         new_user.phone_number = phone_number
 
     new_user.password = generate_password_hash(password)
@@ -206,11 +206,11 @@ def register_user(data):
             subject = "Your Verification Code"
             message = f"Your verification code is: {code}. This code will expire in 10 minutes."
             send_email(email, subject, message)
-        return ({"success": True, "message": "User registered successfully!"}, 201)
+        return {"success": True, "message": "User registered successfully!"}, 201
     except Exception as e:
         logger.info(f"Error during registration: {str(e)}")
         db.session.rollback()
-        return ({"success": False, "message": "An error occurred during registration."}, 500)
+        return {"success": False, "message": "An error occurred during registration."}, 500
 
 
 def verify_email_code(data, client_ip):
@@ -244,7 +244,7 @@ def verify_email_code(data, client_ip):
 
     if user.email_verified:
         logger.info(f"Email already verified for user_id: {user.id}")
-        return ({"success": True, "message": "Email is already verified."}, 200)
+        return {"success": True, "message": "Email is already verified."}, 200
 
     # Verify the code using the auth_code_generator service:
     is_verified = auth_code_generator.verify_code(identifier=email, provided_code=verification_code)
@@ -253,7 +253,7 @@ def verify_email_code(data, client_ip):
             user.email_verified = True
             db.session.commit()
             logger.info(f"Email verified successfully for user_id: {user.id}")
-            return ({"success": True, "message": "Email verified successfully."}, 200)
+            return {"success": True, "message": "Email verified successfully."}, 200
         except Exception as e:
             logger.error(f"Error updating email_verified status for user_id: {user.id} - {str(e)}")
             db.session.rollback()

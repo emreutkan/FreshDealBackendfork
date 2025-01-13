@@ -2,11 +2,9 @@
 import logging
 import coloredlogs
 from flask import Blueprint, request, jsonify
-from app.services import (
-    login_user,
-    register_user,
-    verify_email_code
-)
+
+from app.services.auth_service import login_user, register_user, verify_email_code
+
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -64,7 +62,7 @@ def login():
               step:
                 type: string
                 description: The current step in the login process.
-                enum: [send_code, verify_code, skip_verification]
+                Enum: [send_code, verify_code, skip_verification]
     responses:
       200:
         description: Successful login (or code sent).
