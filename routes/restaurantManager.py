@@ -132,6 +132,45 @@ def add_restaurant():
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
 
 
+@restaurantManager_bp.route("/get_restaurants", methods=["GET"])
+@jwt_required()
+def get_restaurants():
+    try:
+        owner_id = get_jwt_identity()
+        owner = User.query.get(owner_id)
+        if not owner:
+            print("Validation error: Owner not found.")
+            return jsonify({"success": False, "message": "Owner not found"}), 404
+        elif owner.role != "owner":
+            print("Validation error: Only users with owner role can own a restaurant.")
+            return jsonify({"success": False, "message": "Only users with owner role can own a restaurant"}), 403
+        restaurants = Restaurant.query.filter_by(owner_id=owner_id).all()
+        if not restaurants:
+            return jsonify({"message": "No restaurant found for the owner"}), 404
+        serialized_restaurants = []
+        for restaurant in restaurants:
+            serialized_restaurants.append({
+                "id": restaurant.id,
+                "owner_id": restaurant.owner_id,
+                "restaurantName": restaurant.restaurantName,
+                "restaurantDescription": restaurant.restaurantDescription,
+                "longitude": float(restaurant.longitude),
+                "latitude": float(restaurant.latitude),
+                "category": restaurant.category,
+                "workingDays": restaurant.workingDays.split(",") if restaurant.workingDays else [],
+                "workingHoursStart": restaurant.workingHoursStart,
+                "workingHoursEnd": restaurant.workingHoursEnd,
+                "listings": restaurant.listings,
+                "rating": float(restaurant.rating) if restaurant.rating else None,
+                "ratingCount": restaurant.ratingCount,
+                "image_url": restaurant.image_url  # Include image_url
+
+            })
+        return jsonify(serialized_restaurants), 200
+    except Exception as e:
+        print("An error occurred:", str(e))
+        return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
+
 @restaurantManager_bp.route('/uploads/<filename>', methods=['GET'])
 def get_uploaded_file(filename):
     """Serve the uploaded file securely."""
