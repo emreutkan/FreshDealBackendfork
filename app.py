@@ -1,23 +1,20 @@
 import os
 import sqlalchemy
-from flask import Flask, render_template, jsonify,send_from_directory
+from flask import Flask
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
-from flask_swagger_ui import get_swaggerui_blueprint
 from dotenv import load_dotenv
-from models import db
-from routes import init_app
-import yaml
+from app.models import db
+from app.routes import init_app
+from flasgger import Swagger
 
-# Load environment variables
 load_dotenv()
 
 def create_app():
     app = Flask(__name__)
 
-    ### Database Configuration ###
     required_env_vars = {
-        "DB_SERVER": os.getenv("DB_SERVER"), # test
+        "DB_SERVER": os.getenv("DB_SERVER"),  # test
         "DB_NAME": os.getenv("DB_NAME"),
         "DB_USERNAME": os.getenv("DB_USERNAME"),
         "DB_PASSWORD": os.getenv("DB_PASSWORD"),
@@ -25,7 +22,6 @@ def create_app():
         "JWT_SECRET_KEY": os.getenv("JWT_SECRET_KEY"),
     }
 
-    # Check for missing environment variables
     missing_vars = [var for var, value in required_env_vars.items() if not value]
     if missing_vars:
         raise SystemExit(f"Error: Missing environment variables: {', '.join(missing_vars)}")
@@ -36,19 +32,19 @@ def create_app():
         f"{required_env_vars['DB_SERVER']}/"
         f"{required_env_vars['DB_NAME']}?driver={required_env_vars['DB_DRIVER']}"
     )
+    # Note: This line appears to override the previous setting; adjust as needed.
+    # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1:3306/freshdeallocal'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
 
-    ### JWT Configuration ###
     app.config['JWT_SECRET_KEY'] = required_env_vars['JWT_SECRET_KEY']
     JWTManager(app)
 
-    db.init_app(app)  # Initialize the database
+    db.init_app(app)
 
     with app.app_context():
         db.create_all()
 
-    # Check database connection
     try:
         engine = sqlalchemy.create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
         connection = engine.connect()
@@ -57,31 +53,56 @@ def create_app():
     except Exception as e:
         print(f"Error connecting to the database: {e}")
 
-    init_app(app)  # Register the blueprints using the init_app function
+    init_app(app)
 
-    ### Initialize CORS ###
-    CORS(app, resources={r"/*": {"origins": "*"}})  # Allow all origins (adjust as needed)
+    CORS(app, resources={r"/*": {"origins": "*"}})
 
-    ### Serve Swagger
-    ### Set up Swagger UI ###
-    SWAGGER_URL = '/swagger'
-    API_URL = '/static/swagger.yaml'
-    swaggerui_blueprint = get_swaggerui_blueprint(
-        SWAGGER_URL,  # Swagger UI endpoint
-        API_URL,  # Swagger spec URL
-        config={  # Swagger UI config overrides
-            'app_name': "FreshDeal API"
-        }
-    )
-    app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
-    ### Serve Swagger YAML ###
-    @app.route('/static/<path:path>')
-    def send_static(path):
-        return send_from_directory('static', path)
-    ### Home Route ###
-    @app.route('/')
-    def index():
-        return render_template('index.html')
+    # Flasgger setup with OpenAPI 3.0 and global security definitions
+    swagger_config = {
+        "openapi": "3.0.0",  # Using OpenAPI 3.0
+        "info": {
+            "title": "Freshdeal API",
+            "description": "API for Freshdeal application",
+            "version": "1.0.0",
+            "contact": {
+                "email": "support@example.com"
+            },
+        },
+        "servers": [
+            {"url": "http://localhost:8181", "description": "Local development server"},
+        ],
+        # Global security scheme using JWT bearer token
+        "components": {
+            "securitySchemes": {
+                "BearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "JWT"
+                }
+            }
+        },
+        # Apply the security scheme globally to all endpoints
+        "security": [
+            {
+                "BearerAuth": []
+            }
+        ],
+        "specs": [
+            {
+                "endpoint": 'apispec_1',
+                "route": '/apispec_1.json',
+                "rule_filter": lambda rule: True,  # Include all API routes
+                "model_filter": lambda tag: True,  # Include all tags
+            }
+        ],
+        "static_url_path": "/flasgger_static",
+        "swagger_ui": True,
+        "specs_route": "/swagger/",
+        "headers": [],
+    }
+
+    Swagger(app, config=swagger_config)
+
     return app
 
 app = create_app()
