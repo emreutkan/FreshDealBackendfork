@@ -3,7 +3,7 @@
 import os
 import uuid
 from werkzeug.utils import secure_filename
-from app.models import db, Listing
+from src.models import db, Listing
 
 # Define the absolute path for the upload folder (relative to this file's directory)
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -60,7 +60,7 @@ def create_listing_service(restaurant_id, owner_id, form_data, file_obj, url_for
         return {"success": False, "message": "Invalid or missing image file"}, 400
 
     # Validate restaurant exists and that the owner is the restaurant owner
-    from app.models import Restaurant  # imported here to avoid circular import if needed
+    from src.models import Restaurant  # imported here to avoid circular import if needed
     restaurant = Restaurant.query.get(restaurant_id)
     if not restaurant:
         return {"success": False, "message": f"Restaurant with ID {restaurant_id} not found"}, 404
@@ -90,7 +90,7 @@ def get_listings_service(restaurant_id, page, per_page, url_for_func):
     """
     Retrieve listings with optional filtering by restaurant and pagination.
     """
-    from app.models import Listing  # local import to avoid circular dependencies
+    from src.models import Listing  # local import to avoid circular dependencies
     query = Listing.query
     if restaurant_id:
         query = query.filter_by(restaurant_id=restaurant_id)
@@ -112,9 +112,16 @@ def get_listings_service(restaurant_id, page, per_page, url_for_func):
             "title": listing.title,
             "description": listing.description,
             "image_url": image_url,
-            "price": float(listing.price),
-            "count": listing.count
+            "original_price": float(listing.original_price),
+            "pick_up_price": float(listing.pick_up_price),
+            "delivery_price": float(listing.delivery_price),
+            "count": listing.count,
+            "consume_within": listing.consume_within,
+            "available_for_delivery": listing.available_for_delivery,
+            "available_for_pickup": listing.available_for_pickup,
+
         })
+    print(listings_data)
 
     response = {
         "success": True,
@@ -135,7 +142,7 @@ def search_service(search_type, query_text, restaurant_id):
     """
     Search restaurants or listings based on provided criteria.
     """
-    from app.models import Restaurant, Listing  # local imports to avoid circular dependencies
+    from src.models import Restaurant, Listing  # local imports to avoid circular dependencies
 
     if not query_text:
         return {"success": False, "message": "Query parameter is required"}, 400

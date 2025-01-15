@@ -1,7 +1,7 @@
 # routes/cart_routes.py
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.services.cart_service import (
+from src.services.cart_service import (
     get_cart_items_service,
     add_to_cart_service,
     update_cart_item_service,

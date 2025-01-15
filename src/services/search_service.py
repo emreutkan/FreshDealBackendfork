@@ -1,6 +1,6 @@
 # services/search_service.py
 
-from app.models import Restaurant, Listing
+from src.models import Restaurant, Listing
 
 
 def search_restaurants(query):

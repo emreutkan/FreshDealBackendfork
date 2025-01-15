@@ -1,7 +1,7 @@
 import re
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.services.user_services import (
+from src.services.user_services import (
     fetch_user_data,
     change_password,
     change_username,

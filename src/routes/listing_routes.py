@@ -4,12 +4,12 @@ import os
 from flask import Blueprint, request, jsonify, url_for, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
-from app.services.listings_service import (
+from src.services.listings_service import (
     create_listing_service,
     get_listings_service,
     search_service  # if needed for extra validation
 )
-from app.models import User
+from src.models import User
 
 listings_bp = Blueprint("listings", __name__)
 

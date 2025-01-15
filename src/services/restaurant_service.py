@@ -3,7 +3,7 @@ import uuid
 import os
 from math import radians, cos, sin, asin, sqrt
 from werkzeug.utils import secure_filename
-from app.models import db, Restaurant, RestaurantComment, Purchase
+from src.models import db, Restaurant, RestaurantComment, Purchase
 
 # You can define the upload folder and allowed extensions globally if needed.
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "routes"))

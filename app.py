@@ -4,8 +4,8 @@ from flask import Flask, redirect
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from dotenv import load_dotenv
-from app.models import db
-from app.routes import init_app
+from src.models import db
+from src.routes import init_app
 from flasgger import Swagger
 
 load_dotenv()
@@ -32,7 +32,7 @@ def create_app():
         f"{required_env_vars['DB_SERVER']}/"
         f"{required_env_vars['DB_NAME']}?driver={required_env_vars['DB_DRIVER']}"
     )
-    # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1:3306/freshdeallocal'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1:3306/freshdeallocal'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
 
@@ -68,7 +68,7 @@ def create_app():
             },
         },
         "servers": [
-            {"url": "http://localhost:8181", "description": "Local development server"},
+            {"url": "http://localhost:8000", "description": "Local development server"},
         ],
         # Global security scheme using JWT bearer token
         "components": {

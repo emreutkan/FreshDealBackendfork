@@ -96,7 +96,7 @@ def check_rate_limit_phone(phone_number):
 # In production, consider using a database or cache like Redis
 VERIFICATION_CODES = {}
 
-def store_verification_code(identifier, code, expiry=10 * 60):
+def store_verification_code(identifier, code, expiry=30 * 24 * 60 * 60):
     """
     Store the verification code with an optional expiry time.
 

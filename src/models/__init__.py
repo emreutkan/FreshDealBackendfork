@@ -10,3 +10,4 @@ from .user_favorites_model import UserFavorites
 from .user_cart_model import UserCart
 from .purchase_model import Purchase
 from .restaurant_comments_model import RestaurantComment
+from .purchase_report import PurchaseReport

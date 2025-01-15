@@ -5,9 +5,9 @@ from email_validator import validate_email, EmailNotValidError
 import phonenumbers
 from phonenumbers import NumberParseException, is_valid_number
 from flask_jwt_extended import create_access_token
-from app.models import db, User
-from app.services.communication import auth_code_generator
-from app.services.communication.email_service import send_email
+from src.models import db, User
+from src.services.communication import auth_code_generator
+from src.services.communication.email_service import send_email
 
 logger = logging.getLogger(__name__)
 

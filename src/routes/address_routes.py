@@ -2,7 +2,7 @@
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.services.address_service import (
+from src.services.address_service import (
     create_address as create_address_service,
     list_addresses as list_addresses_service,
     get_address as get_address_service,

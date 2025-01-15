@@ -1,6 +1,6 @@
 # services/address_service.py
 
-from app.models import db, CustomerAddress
+from src.models import db, CustomerAddress
 
 def create_address(user_id, data):
     # Extract fields from the request data
