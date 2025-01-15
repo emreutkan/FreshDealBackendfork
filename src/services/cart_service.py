@@ -12,6 +12,7 @@ def get_cart_items_service(user_id):
         {
             "id": item.id,
             "listing_id": item.listing_id,
+            "restaurant_id": item.restaurant_id,
             "title": item.listing.title,
             "count": item.count,
             "added_at": item.added_at

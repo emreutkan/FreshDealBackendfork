@@ -37,6 +37,8 @@ def create_purchase_order_service(user_id, delivery_info=None):
                 user_id=user_id,
                 listing_id=listing.id,
                 quantity=item.count,
+                restaurant_id=listing.restaurant_id,  # Add this line
+
                 total_price=total_price,
                 status=PurchaseStatus.PENDING,
                 is_delivery=bool(delivery_info),
