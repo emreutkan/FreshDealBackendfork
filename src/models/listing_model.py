@@ -1,5 +1,4 @@
 from sqlalchemy.orm import relationship
-
 from . import db, Restaurant
 from sqlalchemy import Integer, String, ForeignKey, DECIMAL
 
@@ -41,3 +40,22 @@ class Listing(db.Model):
         listing = cls(**kwargs)
         cls.sync_availability(listing, restaurant)
         return listing
+
+    def to_dict(self):
+        """
+        Serializes the Listing object to a dictionary.
+        """
+        return {
+            "id": self.id,
+            "restaurant_id": self.restaurant_id,
+            "title": self.title,
+            "description": self.description,
+            "image_url": self.image_url,
+            "count": self.count,
+            "original_price": float(self.original_price),
+            "pick_up_price": float(self.pick_up_price) if self.pick_up_price is not None else None,
+            "delivery_price": float(self.delivery_price) if self.delivery_price is not None else None,
+            "consume_within": self.consume_within,
+            "available_for_pickup": self.available_for_pickup,
+            "available_for_delivery": self.available_for_delivery
+        }

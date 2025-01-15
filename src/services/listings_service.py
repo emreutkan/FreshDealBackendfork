@@ -103,7 +103,7 @@ def get_listings_service(restaurant_id, page, per_page, url_for_func):
     for listing in listings:
         if listing.image_url:
             filename = os.path.basename(listing.image_url)
-            image_url = url_for_func('listings.get_uploaded_file', filename=filename, _external=True)
+            image_url = url_for_func('api_v1.listings.get_uploaded_file', filename=filename, _external=True)
         else:
             image_url = None
 
