@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch, Mock
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from app.services.search_service import search_restaurants, search_listings
+from src.services.search_service import search_restaurants, search_listings
 
 # Mock the db to avoid using the real database
 db = SQLAlchemy()

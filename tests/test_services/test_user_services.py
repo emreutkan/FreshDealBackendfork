@@ -2,8 +2,8 @@
 
 import pytest
 from werkzeug.security import generate_password_hash
-from app.models import User, CustomerAddress, UserFavorites
-from app.services.user_services import (
+from src.models import User, CustomerAddress, UserFavorites
+from src.services.user_services import (
     fetch_user_data,
     change_password,
     change_username,
