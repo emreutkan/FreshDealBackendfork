@@ -1,10 +1,9 @@
 # routes/auth_routes.py
+
 import logging
 import coloredlogs
 from flask import Blueprint, request, jsonify
-
 from src.services.auth_service import login_user, register_user, verify_email_code
-
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -15,28 +14,28 @@ coloredlogs.install(level="INFO", logger=logger, fmt=log_format)
 
 
 def get_client_ip():
-    """
-    Retrieve the client's IP address.
-    """
+    """Retrieve the client's IP address."""
     return request.headers.get("X-Forwarded-For", request.remote_addr) or "no_ip"
 
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
     """
-    User login endpoint.
-
-    Expects a JSON payload with the following fields:
-      - email (optional if using phone_number)
-      - phone_number (optional if using email)
-      - password (required if password_login is true)
-      - login_type: "email" or "phone_number"
-      - password_login: boolean
-      - step: one of ["send_code", "verify_code", "skip_verification"]
-
+    User Login Endpoint
     ---
     tags:
       - Authentication
+    summary: Authenticate user and generate access token
+    description: |
+      Handles user authentication through email/phone and password or verification code.
+      Supports multi-step authentication process including code verification.
+
+      Authentication steps:
+      1. send_code: Sends verification code to email/phone
+      2. verify_code: Verifies the sent code
+      3. skip_verification: Direct password-based login
+
+      Note: Current time (UTC): 2025-01-15 15:12:48
     requestBody:
       required: true
       content:
@@ -50,30 +49,75 @@ def login():
             properties:
               email:
                 type: string
+                example: "user@example.com"
+                description: Required if login_type is "email"
               phone_number:
                 type: string
+                example: "+1234567890"
+                description: Required if login_type is "phone_number"
               password:
                 type: string
+                description: Required if password_login is true
               login_type:
                 type: string
                 enum: [email, phone_number]
+                description: Method of authentication
               password_login:
                 type: boolean
+                description: If true, uses password authentication instead of code
               step:
                 type: string
-                description: The current step in the login process.
-                Enum: [send_code, verify_code, skip_verification]
+                enum: [send_code, verify_code, skip_verification]
+                description: Current authentication step
+            example:
+              email: "user@example.com"
+              login_type: "email"
+              password_login: true
+              step: "skip_verification"
+              password: "userpassword123"
     responses:
       200:
-        description: Successful login (or code sent).
+        description: Successful authentication or code sent
         content:
           application/json:
             schema:
               type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                token:
+                  type: string
+                  description: JWT access token (only provided on successful login)
+                  example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+                message:
+                  type: string
+                  example: "Login successful"
       400:
-        description: Missing or invalid input.
+        description: Invalid request parameters
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                  example: "Invalid credentials"
+                details:
+                  type: object
+                  properties:
+                    error_code:
+                      type: string
+                      example: "INVALID_CREDENTIALS"
+      401:
+        description: Authentication failed
       404:
-        description: User not found.
+        description: User not found
+      429:
+        description: Too many login attempts
     """
     data = request.get_json()
     client_ip = get_client_ip()
@@ -84,18 +128,18 @@ def login():
 @auth_bp.route("/register", methods=["POST"])
 def register():
     """
-    User registration endpoint.
-
-    Expects a JSON payload with:
-      - name_surname (required)
-      - email (optional, but if provided, must be valid)
-      - phone_number (optional, but if provided, must be valid)
-      - password (required)
-      - role (optional; defaults to "customer"; allowed: "customer", "owner")
-
+    User Registration Endpoint
     ---
     tags:
       - Authentication
+    summary: Register a new user
+    description: |
+      Creates a new user account with the provided details.
+      Supports both customer and owner roles.
+      Validates email and phone number formats.
+      Automatically sends verification email if email is provided.
+
+      Note: Current time (UTC): 2025-01-15 15:12:48
     requestBody:
       required: true
       content:
@@ -108,24 +152,57 @@ def register():
             properties:
               name_surname:
                 type: string
+                example: "John Doe"
+                description: Full name of the user
               email:
                 type: string
+                example: "john.doe@example.com"
+                description: Valid email address (optional if phone_number provided)
               phone_number:
                 type: string
+                example: "+1234567890"
+                description: Valid phone number (optional if email provided)
               password:
                 type: string
+                format: password
+                example: "SecurePass123!"
+                description: User password (min 8 characters)
               role:
                 type: string
                 enum: [customer, owner]
+                default: customer
+                description: User role in the system
     responses:
       201:
-        description: User registered successfully.
+        description: User successfully registered
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "User registered successfully!"
       400:
-        description: Invalid input.
+        description: Invalid input data
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                  example: "Invalid email format"
       409:
-        description: Conflict (email or phone number already exists).
+        description: Email or phone number already exists
       500:
-        description: An error occurred during registration.
+        description: Server error during registration
     """
     data = request.get_json()
     response, status = register_user(data)
@@ -135,15 +212,16 @@ def register():
 @auth_bp.route("/verify_email", methods=["POST"])
 def verify_email():
     """
-    Email verification endpoint.
-
-    Expects a JSON payload with:
-      - email (required)
-      - verification_code (required)
-
+    Email Verification Endpoint
     ---
     tags:
       - Authentication
+    summary: Verify user's email address
+    description: |
+      Verifies user's email address using a verification code.
+      The code should have been sent during registration or login process.
+
+      Note: Current time (UTC): 2025-01-15 15:12:48
     requestBody:
       required: true
       content:
@@ -156,17 +234,49 @@ def verify_email():
             properties:
               email:
                 type: string
+                example: "user@example.com"
+                description: Email address to verify
               verification_code:
                 type: string
+                example: "123456"
+                description: 6-digit verification code sent to email
     responses:
       200:
-        description: Email verified successfully.
+        description: Email successfully verified
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Email verified successfully."
       400:
-        description: Invalid input or verification code.
+        description: Invalid or expired verification code
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                  example: "Invalid or expired verification code"
+                details:
+                  type: object
+                  properties:
+                    error_code:
+                      type: string
+                      example: "INVALID_CODE"
       404:
-        description: User not found.
+        description: User not found
       500:
-        description: An error occurred.
+        description: Server error during verification
     """
     data = request.get_json()
     client_ip = get_client_ip()

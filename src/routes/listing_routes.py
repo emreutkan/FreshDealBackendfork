@@ -1,5 +1,3 @@
-# routes/listings.py
-
 import os
 from flask import Blueprint, request, jsonify, url_for, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -7,7 +5,7 @@ from werkzeug.utils import secure_filename
 from src.services.listings_service import (
     create_listing_service,
     get_listings_service,
-    search_service  # if needed for extra validation
+    search_service
 )
 from src.models import User
 
@@ -18,70 +16,144 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Common schema definitions for reuse
+LISTING_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer", "description": "Unique identifier for the listing"},
+        "restaurant_id": {"type": "integer", "description": "ID of the restaurant this listing belongs to"},
+        "title": {"type": "string", "description": "Title of the listing"},
+        "description": {"type": "string", "description": "Detailed description of the listing"},
+        "image_url": {"type": "string", "description": "URL to the listing's image"},
+        "original_price": {"type": "number", "format": "float", "description": "Original price of the item"},
+        "pick_up_price": {"type": "number", "format": "float", "description": "Price for pick-up orders"},
+        "delivery_price": {"type": "number", "format": "float", "description": "Price for delivery orders"},
+        "count": {"type": "integer", "description": "Number of items available"},
+        "consume_within": {"type": "integer", "description": "Number of days within which the item should be consumed"},
+        "available_for_pickup": {"type": "boolean", "description": "Whether the item is available for pickup"},
+        "available_for_delivery": {"type": "boolean", "description": "Whether the item is available for delivery"}
+    }
+}
 
 @listings_bp.route("/restaurants/<int:restaurant_id>/listings", methods=["POST"])
 @jwt_required()
 def create_listing(restaurant_id):
     """
-    Create a new listing for a restaurant
-    ---
-    tags:
-      - Listings
-    security:
-      - BearerAuth: []
-    parameters:
-      - in: path
-        name: restaurant_id
-        type: integer
-        required: true
-        description: ID of the restaurant
-    requestBody:
-      required: true
-      content:
-        multipart/form-data:
-          schema:
-            type: object
-            required:
-              - title
-              - price
-              - image
-            properties:
-              title:
-                type: string
-              description:
-                type: string
-              price:
-                type: number
-                format: float
-              count:
-                type: integer
-                default: 1
-              image:
-                type: string
-                format: binary
-    responses:
-      201:
-        description: Listing added successfully
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                success:
-                  type: boolean
-                message:
-                  type: string
-                listing:
-                  type: object
-      400:
-        description: Validation error or missing image file
-      403:
-        description: Forbidden (not an owner or not the restaurant's owner)
-      404:
-        description: Restaurant or owner not found
-    """
+     Create a new listing for a restaurant
+     ---
+     tags:
+       - Listings
+     summary: Create a new food listing for a restaurant
+     description: |
+       Creates a new food listing with details including prices, availability, and an image.
+       Only restaurant owners can create listings.
+       Current time (UTC): 2025-01-15 15:17:37
+     parameters:
+       - in: path
+         name: restaurant_id
+         type: integer
+         required: true
+         description: ID of the restaurant
+     consumes:
+       - multipart/form-data
+     parameters:
+       - in: formData
+         name: title
+         type: string
+         required: true
+         description: Title of the listing
+         example: "Fresh Pizza Margherita"
+       - in: formData
+         name: description
+         type: string
+         required: false
+         description: Detailed description of the listing
+         example: "Traditional Italian pizza with fresh basil"
+       - in: formData
+         name: original_price
+         type: number
+         required: true
+         description: Original price of the item
+         example: 15.99
+       - in: formData
+         name: pick_up_price
+         type: number
+         required: false
+         description: Price for pick-up orders
+         example: 12.99
+       - in: formData
+         name: delivery_price
+         type: number
+         required: false
+         description: Price for delivery orders
+         example: 17.99
+       - in: formData
+         name: count
+         type: integer
+         required: false
+         default: 1
+         description: Number of items available
+         example: 5
+       - in: formData
+         name: consume_within
+         type: integer
+         required: true
+         description: Days within which the item should be consumed
+         example: 2
+       - in: formData
+         name: image
+         type: file
+         required: true
+         description: Image file for the listing
+     responses:
+       201:
+         description: Listing created successfully
+         schema:
+           type: object
+           properties:
+             success:
+               type: boolean
+               example: true
+             message:
+               type: string
+               example: "Listing created successfully!"
+             listing:
+               type: object
+               properties:
+                 id:
+                   type: integer
+                   example: 1
+                 title:
+                   type: string
+                   example: "Fresh Pizza Margherita"
+                 original_price:
+                   type: number
+                   example: 15.99
+       400:
+         description: Validation error
+         schema:
+           type: object
+           properties:
+             success:
+               type: boolean
+               example: false
+             message:
+               type: string
+               example: "Title and original price are required"
+       403:
+         description: Not authorized
+         schema:
+           type: object
+           properties:
+             success:
+               type: boolean
+               example: false
+             message:
+               type: string
+               example: "Only owners can add listings"
+     """
+
     try:
-        # Validate user/owner permissions
         owner_id = get_jwt_identity()
         owner = User.query.get(owner_id)
         if not owner:
@@ -90,7 +162,6 @@ def create_listing(restaurant_id):
         if owner.role != "owner":
             return jsonify({"success": False, "message": "Only owners can add listings"}), 403
 
-        # For file uploads and form data, use request.form and request.files
         form_data = request.form.to_dict()
         file_obj = request.files.get("image")
 
@@ -105,24 +176,36 @@ def create_listing(restaurant_id):
 @listings_bp.route('/uploads/<filename>', methods=['GET'])
 def get_uploaded_file(filename):
     """
-    Serve the uploaded file
-    ---
-    tags:
-      - Listings
-    parameters:
-      - in: path
-        name: filename
-        type: string
-        required: true
-        description: The name of the file to retrieve
-    responses:
-      200:
-        description: The requested file
-      404:
-        description: File not found
+       Serve an uploaded listing image file
+       ---
+       tags:
+         - Listings
+       summary: Retrieve a listing's image file
+       description: |
+         Returns the image file associated with a listing.
+         Current time (UTC): 2025-01-15 15:17:37
+       parameters:
+         - in: path
+           name: filename
+           type: string
+           required: true
+           description: Name of the image file to retrieve
+       responses:
+         200:
+           description: Image file
+         404:
+           description: File not found
+           schema:
+             type: object
+             properties:
+               success:
+                 type: boolean
+                 example: false
+               message:
+                 type: string
+                 example: "File not found"
     """
     try:
-        # Secure filename to avoid directory traversal
         filename = secure_filename(filename)
         return send_from_directory(UPLOAD_FOLDER, filename)
     except FileNotFoundError:
@@ -132,59 +215,79 @@ def get_uploaded_file(filename):
 @listings_bp.route("/listings", methods=["GET"])
 def get_listings():
     """
-    Retrieve a list of listings with optional filtering and pagination
+    Get all listings with optional filtering
     ---
     tags:
       - Listings
+    summary: Retrieve paginated list of food listings
+    description: |
+      Returns a paginated list of all food listings.
+      Can be filtered by restaurant ID.
+      Current time (UTC): 2025-01-15 15:17:37
     parameters:
       - in: query
         name: restaurant_id
         type: integer
         required: false
-        description: Filter by restaurant ID
+        description: Filter listings by restaurant ID
       - in: query
         name: page
         type: integer
         required: false
         default: 1
-        description: Page number for pagination
+        description: Page number
       - in: query
         name: per_page
         type: integer
         required: false
         default: 10
-        description: Listings per page
+        description: Number of items per page (max 100)
     responses:
       200:
-        description: Listings successfully retrieved
-        content:
-          application/json:
-            schema:
+        description: List of listings
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  title:
+                    type: string
+                    example: "Fresh Pizza Margherita"
+                  original_price:
+                    type: number
+                    example: 15.99
+            pagination:
               type: object
               properties:
-                success:
-                  type: boolean
-                data:
-                  type: array
-                  items:
-                    type: object
-                pagination:
-                  type: object
-                  properties:
-                    total:
-                      type: integer
-                    pages:
-                      type: integer
-                    current_page:
-                      type: integer
-                    per_page:
-                      type: integer
-                    has_next:
-                      type: boolean
-                    has_prev:
-                      type: boolean
+                total:
+                  type: integer
+                  example: 50
+                pages:
+                  type: integer
+                  example: 5
+                current_page:
+                  type: integer
+                  example: 1
       500:
-        description: Error fetching listings
+        description: Server error
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+              example: "An error occurred while fetching listings"
     """
     try:
         restaurant_id = request.args.get('restaurant_id', type=int)
@@ -203,47 +306,66 @@ def get_listings():
 @listings_bp.route("/search", methods=["GET"])
 def search():
     """
-    Search restaurants or listings
-    ---
-    tags:
-      - Listings
-    parameters:
-      - in: query
-        name: type
-        type: string
-        required: true
-        description: 'Type of search: "restaurant" or "listing"'
-      - in: query
-        name: query
-        type: string
-        required: true
-        description: Search text (partial match)
-      - in: query
-        name: restaurant_id
-        type: integer
-        required: false
-        description: Required if type is "listing"
-    responses:
-      200:
-        description: Search results returned successfully
-        content:
-          application/json:
+        Search listings and restaurants
+        ---
+        tags:
+          - Listings
+        summary: Search for food listings or restaurants
+        description: |
+          Performs a search across listings or restaurants based on query text.
+          Current time (UTC): 2025-01-15 15:17:37
+        parameters:
+          - in: query
+            name: type
+            type: string
+            enum: [restaurant, listing]
+            required: true
+            description: Type of search to perform
+          - in: query
+            name: query
+            type: string
+            required: true
+            description: Search text for partial matching
+          - in: query
+            name: restaurant_id
+            type: integer
+            required: false
+            description: Required for listing search - restaurant to search within
+        responses:
+          200:
+            description: Search results
             schema:
               type: object
               properties:
                 success:
                   type: boolean
+                  example: true
                 type:
                   type: string
+                  example: "listing"
                 results:
                   type: array
                   items:
                     type: object
-      400:
-        description: Missing or invalid parameters
-      500:
-        description: Error performing search
-    """
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      title:
+                        type: string
+                        example: "Fresh Pizza Margherita"
+          400:
+            description: Invalid parameters
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                  example: "Invalid search type"
+        """
     try:
         search_type = request.args.get("type")
         query_text = request.args.get("query", "").strip()

@@ -32,7 +32,7 @@ def create_app():
         f"{required_env_vars['DB_SERVER']}/"
         f"{required_env_vars['DB_NAME']}?driver={required_env_vars['DB_DRIVER']}"
     )
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1:3306/freshdeallocal'
+    # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456789@127.0.0.1:3306/freshdeallocal'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['UPLOAD_FOLDER'] = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
 
@@ -61,14 +61,22 @@ def create_app():
         "openapi": "3.0.0",  # Using OpenAPI 3.0
         "info": {
             "title": "Freshdeal API",
-            "description": "API for Freshdeal application",
+            "description": "API for Freshdeal application"
+                           ,
             "version": "1.0.0",
             "contact": {
-                "email": "support@example.com"
-            },
+                "name": "Freshdeal",
+                "url": "https://github.com/FreshDealApp",
+                "email": "",
+
+            }
         },
         "servers": [
+            {"url": "https://freshdealapi-fkfaajfaffh4c0ex.uksouth-01.azurewebsites.net/",
+             "description": "Production server"},
             {"url": "http://localhost:8000", "description": "Local development server"},
+
+
         ],
         # Global security scheme using JWT bearer token
         "components": {
