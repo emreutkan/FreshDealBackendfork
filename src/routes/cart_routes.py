@@ -1,16 +1,14 @@
-# routes/cart_routes.py
-
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from src.services.cart_service import (
     get_cart_items_service,
     add_to_cart_service,
     update_cart_item_service,
-    remove_from_cart_service
+    remove_from_cart_service,
+    reset_cart_service  # new service for resetting the cart
 )
 
 cart_bp = Blueprint("cart", __name__)
-
 
 @cart_bp.route("/cart", methods=["GET"])
 @jwt_required()
@@ -21,7 +19,7 @@ def get_cart_items():
     tags:
       - Cart
     summary: Retrieve all items in the current user's shopping cart
-    description: Returns a list of all items currently in the authenticated user's shopping cart, including details such as quantity and price
+    description: Returns a list of all items currently in the authenticated user's shopping cart, including details such as quantity and price.
     security:
       - BearerAuth: []
     responses:
@@ -52,21 +50,6 @@ def get_cart_items():
                         type: string
                         description: Name of the item
                         example: "Delicious Pizza"
-                      original_price:
-                        type: number
-                        format: float
-                        description: Original price of the item
-                        example: 15.99
-                      pick_up_price:
-                        type: number
-                        format: float
-                        description: Pick-up price of the item
-                        example: 12.99
-                      delivery_price:
-                        type: number
-                        format: float
-                        description: Delivery price of the item
-                        example: 17.99
                       count:
                         type: integer
                         description: Quantity of items in cart
@@ -80,20 +63,6 @@ def get_cart_items():
         description: Authentication required
       500:
         description: Internal server error
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                success:
-                  type: boolean
-                  example: false
-                message:
-                  type: string
-                  example: "An error occurred"
-                error:
-                  type: string
-                  example: "Internal server error details"
     """
     try:
         user_id = get_jwt_identity()
@@ -119,7 +88,7 @@ def add_to_cart():
     description: |
       Adds a specified quantity of an item to the user's cart.
       If the item already exists in the cart, the quantity will be updated.
-      Validates stock availability before adding.
+      Ensures that all items in the cart belong to the same restaurant.
     security:
       - BearerAuth: []
     requestBody:
@@ -156,7 +125,7 @@ def add_to_cart():
                   type: string
                   example: "Item added to cart"
       400:
-        description: Invalid request or insufficient stock
+        description: Invalid request, insufficient stock, or items in cart belong to a different restaurant
         content:
           application/json:
             schema:
@@ -167,7 +136,7 @@ def add_to_cart():
                   example: false
                 message:
                   type: string
-                  example: "Insufficient stock for 'Item Name'. Requested: 5, Available: 3"
+                  example: "Cannot add item from a different restaurant"
       401:
         description: Authentication required
       404:
@@ -295,7 +264,7 @@ def remove_from_cart(listing_id):
     tags:
       - Cart
     summary: Remove an item from the shopping cart
-    description: Completely removes a specific item from the user's cart regardless of quantity
+    description: Completely removes a specific item from the user's cart regardless of quantity.
     security:
       - BearerAuth: []
     parameters:
@@ -330,6 +299,49 @@ def remove_from_cart(listing_id):
     try:
         user_id = get_jwt_identity()
         response, status = remove_from_cart_service(user_id, listing_id)
+        return jsonify({**response, "success": status == 200}), status
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "An error occurred",
+            "error": str(e)
+        }), 500
+
+
+@cart_bp.route("/cart/reset", methods=["POST"])
+@jwt_required()
+def reset_cart():
+    """
+    Reset Cart
+    ---
+    tags:
+      - Cart
+    summary: Remove all items from the shopping cart
+    description: Empties the user's cart.
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: Cart successfully reset
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Cart reset successfully"
+      401:
+        description: Authentication required
+      500:
+        description: Internal server error
+    """
+    try:
+        user_id = get_jwt_identity()
+        response, status = reset_cart_service(user_id)
         return jsonify({**response, "success": status == 200}), status
     except Exception as e:
         return jsonify({
