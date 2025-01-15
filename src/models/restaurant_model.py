@@ -33,6 +33,7 @@ class Restaurant(db.Model):
     minOrderAmount = db.Column(DECIMAL(10, 2), nullable=True)
 
     comments = relationship("RestaurantComment", back_populates="restaurant", cascade="all, delete-orphan")
+    purchases = relationship('Purchase', back_populates='restaurant')
 
     @validates('workingDays')
     def validate_working_days(self, key, working_days):

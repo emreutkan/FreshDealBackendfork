@@ -22,67 +22,67 @@ def allowed_file(filename):
 def create_listing_service(restaurant_id, owner_id, form_data, file_obj, url_for_func):
     """
     Creates a new listing for a restaurant.
-
-    :param restaurant_id: ID of the restaurant
-    :param owner_id: The current user’s id (owner)
-    :param form_data: A dictionary (form values) with keys: title, description, price, count
-    :param file_obj: The FileStorage object from Flask for the image upload
-    :param url_for_func: A reference to Flask's url_for to build URLs (passed from routes)
-    :return: Tuple with (response dictionary, HTTP status code)
     """
-    # Validate owner exists and is authorized is done in the route, so not repeating it here.
-
+    # Existing validation code remains the same
     title = form_data.get("title")
     description = form_data.get("description", "")
-    price = form_data.get("price")
+    original_price = form_data.get("original_price")
+    pick_up_price = form_data.get("pick_up_price")
+    delivery_price = form_data.get("delivery_price")
     count = form_data.get("count", 1)
+    consume_within = form_data.get("consume_within")
 
     # Validate required fields
-    if not title or not price:
-        return {"success": False, "message": "Title and price are required"}, 400
+    if not title or not original_price or not consume_within:
+        return {"success": False, "message": "Title, original price, and consume within days are required"}, 400
 
     try:
         count = int(count)
-        if count <= 0:
-            return {"success": False, "message": "Count must be a positive integer"}, 400
+        consume_within = int(consume_within)
+        if count <= 0 or consume_within <= 0:
+            return {"success": False, "message": "Count and consume within must be positive integers"}, 400
     except ValueError:
-        return {"success": False, "message": "Count must be an integer"}, 400
+        return {"success": False, "message": "Count and consume within must be integers"}, 400
 
-    # Handle file upload
+    # Handle file upload (existing code remains the same)
     if file_obj and allowed_file(file_obj.filename):
         original_filename = secure_filename(file_obj.filename)
         unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
         filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
         file_obj.save(filepath)
-        # Build external URL to serve this image using the provided url_for function
-        image_url = url_for_func('listings.get_uploaded_file', filename=unique_filename, _external=True)
+        image_url = url_for_func('api_v1.listings.get_uploaded_file', filename=unique_filename, _external=True)
     else:
         return {"success": False, "message": "Invalid or missing image file"}, 400
 
-    # Validate restaurant exists and that the owner is the restaurant owner
-    from src.models import Restaurant  # imported here to avoid circular import if needed
+    # Validate restaurant exists and ownership
+    from src.models import Restaurant
     restaurant = Restaurant.query.get(restaurant_id)
     if not restaurant:
         return {"success": False, "message": f"Restaurant with ID {restaurant_id} not found"}, 404
     if int(restaurant.owner_id) != int(owner_id):
         return {"success": False, "message": "You do not own this restaurant"}, 403
 
-    # Create new listing record
-    new_listing = Listing(
+    # Create new listing record with all fields
+    new_listing = Listing.create(
         restaurant_id=restaurant_id,
         title=title,
         description=description,
         image_url=image_url,
-        price=float(price),
-        count=count
+        original_price=float(original_price),
+        pick_up_price=float(pick_up_price) if pick_up_price else None,
+        delivery_price=float(delivery_price) if delivery_price else None,
+        count=count,
+        consume_within=consume_within
+        # available_for_pickup and available_for_delivery are set automatically by create()
     )
+
     db.session.add(new_listing)
     db.session.commit()
 
     return {
         "success": True,
         "message": "Listing added successfully!",
-        "listing": new_listing.to_dict()  # assuming Listing has a to_dict method
+        "listing": new_listing.to_dict()
     }, 201
 
 
@@ -90,7 +90,7 @@ def get_listings_service(restaurant_id, page, per_page, url_for_func):
     """
     Retrieve listings with optional filtering by restaurant and pagination.
     """
-    from src.models import Listing  # local import to avoid circular dependencies
+    from src.models import Listing
     query = Listing.query
     if restaurant_id:
         query = query.filter_by(restaurant_id=restaurant_id)
@@ -106,6 +106,7 @@ def get_listings_service(restaurant_id, page, per_page, url_for_func):
             image_url = url_for_func('listings.get_uploaded_file', filename=filename, _external=True)
         else:
             image_url = None
+
         listings_data.append({
             "id": listing.id,
             "restaurant_id": listing.restaurant_id,
@@ -113,15 +114,13 @@ def get_listings_service(restaurant_id, page, per_page, url_for_func):
             "description": listing.description,
             "image_url": image_url,
             "original_price": float(listing.original_price),
-            "pick_up_price": float(listing.pick_up_price),
-            "delivery_price": float(listing.delivery_price),
+            "pick_up_price": float(listing.pick_up_price) if listing.pick_up_price else None,
+            "delivery_price": float(listing.delivery_price) if listing.delivery_price else None,
             "count": listing.count,
             "consume_within": listing.consume_within,
             "available_for_delivery": listing.available_for_delivery,
-            "available_for_pickup": listing.available_for_pickup,
-
+            "available_for_pickup": listing.available_for_pickup
         })
-    print(listings_data)
 
     response = {
         "success": True,

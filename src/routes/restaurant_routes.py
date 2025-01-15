@@ -370,3 +370,114 @@ def add_comment(restaurant_id):
         return jsonify(response), status
     except Exception as e:
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
+
+@restaurant_bp.route("/restaurants/<int:restaurant_id>", methods=["PUT"])
+@jwt_required()
+def update_restaurant(restaurant_id):
+    """
+    Update an existing restaurant by its ID.
+
+    Expects multipart/form-data with fields (all optional except what you require):
+      - restaurantName (string)
+      - restaurantDescription (string)
+      - longitude (number)
+      - latitude (number)
+      - category (string)
+      - workingDays (multiple values or comma‑separated string)
+      - workingHoursStart (string)
+      - workingHoursEnd (string)
+      - listings (integer)
+      - pickup ("true"/"false")
+      - delivery ("true"/"false")
+      - maxDeliveryDistance (number)
+      - deliveryFee (number)
+      - minOrderAmount (number)
+      - image (file)
+
+    ---
+    tags:
+      - Restaurant
+    security:
+      - BearerAuth: []
+    parameters:
+      - in: path
+        name: restaurant_id
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              restaurantName:
+                type: string
+              restaurantDescription:
+                type: string
+              longitude:
+                type: number
+              latitude:
+                type: number
+              category:
+                type: string
+              workingDays:
+                type: array
+                items:
+                  type: string
+              workingHoursStart:
+                type: string
+              workingHoursEnd:
+                type: string
+              listings:
+                type: integer
+              pickup:
+                type: string
+                enum: [true, false]
+              delivery:
+                type: string
+                enum: [true, false]
+              maxDeliveryDistance:
+                type: number
+              deliveryFee:
+                type: number
+              minOrderAmount:
+                type: number
+              image:
+                type: string
+                format: binary
+    responses:
+      200:
+        description: Restaurant updated successfully.
+      400:
+        description: Invalid input.
+      403:
+        description: Forbidden.
+      404:
+        description: Restaurant not found.
+      500:
+        description: An error occurred.
+    """
+    try:
+        owner_id = get_jwt_identity()
+
+        # (Optionally, verify the user is an owner)
+        owner = User.query.get(owner_id)
+        if not owner:
+            return jsonify({"success": False, "message": "Owner not found"}), 404
+        if owner.role != "owner":
+            return jsonify({"success": False, "message": "Only owners can update a restaurant"}), 403
+
+        from src.services.restaurant_service import update_restaurant_service
+        response, status = update_restaurant_service(
+            restaurant_id,
+            owner_id,
+            request.form,
+            request.files,
+            url_for
+        )
+        return jsonify(response), status
+
+    except Exception as e:
+        return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
