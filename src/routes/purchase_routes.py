@@ -5,47 +5,63 @@ from src.services.purchase_service import (
     create_purchase_order_service,
     handle_restaurant_response_service,
     add_completion_image_service,
-    get_restaurant_purchases_service
+    get_restaurant_purchases_service, get_order_details_service, get_user_previous_orders_service,
+    get_user_active_orders_service
 )
 
 purchase_bp = Blueprint("purchase", __name__)
-
 @purchase_bp.route("/purchase", methods=["POST"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
-    "summary": "Create a new purchase order",
-    "description": (
-        "Creates a pending purchase order from items in the user's cart. "
-        "Any delivery information (if provided) will be merged with the user's global (default) address."
-    ),
+    "summary": "Create a new purchase order from cart items",
+    "description": "Creates purchase orders for all items in the user's cart. Supports both pickup and delivery orders.",
     "security": [{"BearerAuth": []}],
     "requestBody": {
-        "required": False,
+        "required": True,
         "content": {
             "application/json": {
                 "schema": {
                     "type": "object",
+                    "required": ["is_delivery"],
                     "properties": {
-                        # You can add additional purchase fields here if needed.
-                        "delivery_info": {
-                            "type": "object",
-                            "description": (
-                                "Optional extra delivery info. "
-                                "The global default address will automatically be used. "
-                                "You may send additional notes here."
-                            ),
-                            "properties": {
-                                "notes": {
-                                    "type": "string",
-                                    "description": "Additional delivery notes"
-                                }
-                                # Intentionally omitting an address field as that is fetched globally.
-                            }
+                        "is_delivery": {
+                            "type": "boolean",
+                            "description": "Flag to indicate if this is a delivery order",
+                            "default": False,
+                            "example": False
                         },
-                        "extra_data": {
-                            "type": "object",
-                            "description": "Optional extra purchase-related data."
+                        "pickup_notes": {
+                            "type": "string",
+                            "description": "Optional notes for pickup orders",
+                            "example": "Will pick up at 6pm"
+                        },
+                        "delivery_address": {
+                            "type": "string",
+                            "description": "Required only when is_delivery is true",
+                            "example": "123 Main St, City"
+                        },
+                        "delivery_notes": {
+                            "type": "string",
+                            "description": "Optional notes for delivery orders",
+                            "example": "Please leave at door"
+                        }
+                    }
+                },
+                "examples": {
+                    "pickup_order": {
+                        "summary": "Pickup Order Example",
+                        "value": {
+                            "is_delivery": False,
+                            "pickup_notes": "Will pick up at 6pm"
+                        }
+                    },
+                    "delivery_order": {
+                        "summary": "Delivery Order Example",
+                        "value": {
+                            "is_delivery": True,
+                            "delivery_address": "123 Main St, City",
+                            "delivery_notes": "Please leave at door"
                         }
                     }
                 }
@@ -54,25 +70,49 @@ purchase_bp = Blueprint("purchase", __name__)
     },
     "responses": {
         "201": {
-            "description": "Purchase order created successfully",
+            "description": "Purchase orders created successfully",
             "content": {
                 "application/json": {
                     "schema": {
                         "type": "object",
                         "properties": {
-                            "message": {"type": "string"},
+                            "message": {
+                                "type": "string",
+                                "example": "Purchase order created successfully, waiting for restaurant approval"
+                            },
                             "purchases": {
                                 "type": "array",
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "purchase_id": {"type": "integer"},
-                                        "listing_id": {"type": "integer"},
-                                        "quantity": {"type": "integer"},
-                                        "total_price": {"type": "string"},
+                                        "id": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "listing_id": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "quantity": {
+                                            "type": "integer",
+                                            "example": 2
+                                        },
+                                        "total_price": {
+                                            "type": "string",
+                                            "example": "25.99"
+                                        },
                                         "status": {
                                             "type": "string",
-                                            "enum": ["pending", "accepted", "rejected", "completed"]
+                                            "enum": ["PENDING", "ACCEPTED", "REJECTED", "COMPLETED"],
+                                            "example": "PENDING"
+                                        },
+                                        "is_delivery": {
+                                            "type": "boolean",
+                                            "example": False
+                                        },
+                                        "order_notes": {
+                                            "type": "string",
+                                            "example": "Will pick up at 6pm"
                                         }
                                     }
                                 }
@@ -82,23 +122,62 @@ purchase_bp = Blueprint("purchase", __name__)
                 }
             }
         },
-        "400": {"description": "Bad request - Cart is empty or global address not found"},
-        "401": {"description": "Unauthorized - Invalid or missing token"},
-        "500": {"description": "Internal server error"}
+        "400": {
+            "description": "Bad Request",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                                "example": "Cart is empty or delivery address required for delivery orders"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "401": {
+            "description": "Unauthorized",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "msg": {
+                                "type": "string",
+                                "example": "Missing authorization header"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "500": {
+            "description": "Internal Server Error",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                                "example": "An error occurred"
+                            },
+                            "error": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 })
 def create_purchase_order():
     user_id = get_jwt_identity()
-
-    # You still allow a request body so that additional information can be submitted.
-    # However, the delivery address will be automatically retrieved from the global address.
     data = request.get_json() or {}
-    # Depending on your implementation, you can either:
-    # 1. Merge any optional request delivery_info with the default global address; or
-    # 2. Simply ignore the request delivery_info and fetch the global one.
-    #
-    # This example sends along the data to the service, which is expected to retrieve and merge
-    # the default delivery address as needed.
     response, status = create_purchase_order_service(user_id, data)
     return jsonify(response), status
 
@@ -391,4 +470,220 @@ def reject_purchase(purchase_id):
     """Reject a purchase order"""
     restaurant_id = get_jwt_identity()
     response, status = handle_restaurant_response_service(purchase_id, restaurant_id, 'reject')
+    return jsonify(response), status
+
+@purchase_bp.route("/user/orders/active", methods=["GET"])
+@jwt_required()
+@swag_from({
+    "tags": ["Purchases"],
+    "summary": "Get user's active orders",
+    "description": "Retrieve all active (pending and accepted) orders for the current user",
+    "security": [{"BearerAuth": []}],
+    "responses": {
+        "200": {
+            "description": "Active orders retrieved successfully",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "active_orders": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "purchase_id": {"type": "integer"},
+                                        "restaurant_name": {"type": "string"},
+                                        "listing_title": {"type": "string"},
+                                        "quantity": {"type": "integer"},
+                                        "total_price": {"type": "string"},
+                                        "formatted_total_price": {"type": "string"},
+                                        "status": {
+                                            "type": "string",
+                                            "enum": ["PENDING", "ACCEPTED"]
+                                        },
+                                        "purchase_date": {"type": "string", "format": "date-time"},
+                                        "is_active": {"type": "boolean"},
+                                        "is_delivery": {"type": "boolean"},
+                                        "delivery_address": {"type": "string"},
+                                        "delivery_notes": {"type": "string"},
+                                        "restaurant_details": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {"type": "integer"},
+                                                "name": {"type": "string"},
+                                                "image_url": {"type": "string"}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "401": {"description": "Unauthorized - Invalid or missing token"},
+        "500": {"description": "Internal server error"}
+    }
+})
+def get_user_active_orders():
+    """Get current user's active orders"""
+    user_id = get_jwt_identity()
+    response, status = get_user_active_orders_service(user_id)
+    return jsonify(response), status
+
+@purchase_bp.route("/user/orders/previous", methods=["GET"])
+@jwt_required()
+@swag_from({
+    "tags": ["Purchases"],
+    "summary": "Get user's previous orders",
+    "description": "Retrieve completed or rejected orders for the current user with pagination",
+    "security": [{"BearerAuth": []}],
+    "parameters": [
+        {
+            "name": "page",
+            "in": "query",
+            "schema": {"type": "integer", "default": 1},
+            "required": False,
+            "description": "Page number for pagination"
+        },
+        {
+            "name": "per_page",
+            "in": "query",
+            "schema": {"type": "integer", "default": 10},
+            "required": False,
+            "description": "Number of items per page"
+        }
+    ],
+    "responses": {
+        "200": {
+            "description": "Previous orders retrieved successfully",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "orders": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {"type": "integer"},
+                                        "listing_title": {"type": "string"},
+                                        "quantity": {"type": "integer"},
+                                        "total_price": {"type": "string"},
+                                        "formatted_total_price": {"type": "string"},
+                                        "status": {
+                                            "type": "string",
+                                            "enum": ["COMPLETED", "REJECTED"]
+                                        },
+                                        "purchase_date": {"type": "string", "format": "date-time"},
+                                        "is_delivery": {"type": "boolean"},
+                                        "delivery_address": {"type": "string"},
+                                        "delivery_notes": {"type": "string"},
+                                        "completion_image_url": {"type": "string"}
+                                    }
+                                }
+                            },
+                            "pagination": {
+                                "type": "object",
+                                "properties": {
+                                    "current_page": {"type": "integer"},
+                                    "total_pages": {"type": "integer"},
+                                    "per_page": {"type": "integer"},
+                                    "total_orders": {"type": "integer"},
+                                    "has_next": {"type": "boolean"},
+                                    "has_prev": {"type": "boolean"}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "401": {"description": "Unauthorized - Invalid or missing token"},
+        "500": {"description": "Internal server error"}
+    }
+})
+def get_user_previous_orders():
+    """Get current user's previous orders"""
+    user_id = get_jwt_identity()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    response, status = get_user_previous_orders_service(user_id, page, per_page)
+    return jsonify(response), status
+
+@purchase_bp.route("/user/orders/<int:purchase_id>", methods=["GET"])
+@jwt_required()
+@swag_from({
+    "tags": ["Purchases"],
+    "summary": "Get order details",
+    "description": "Get detailed information about a specific order",
+    "security": [{"BearerAuth": []}],
+    "parameters": [
+        {
+            "name": "purchase_id",
+            "in": "path",
+            "schema": {"type": "integer"},
+            "required": True,
+            "description": "ID of the purchase order"
+        }
+    ],
+    "responses": {
+        "200": {
+            "description": "Order details retrieved successfully",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "order": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer"},
+                                    "listing_title": {"type": "string"},
+                                    "quantity": {"type": "integer"},
+                                    "total_price": {"type": "string"},
+                                    "formatted_total_price": {"type": "string"},
+                                    "status": {
+                                        "type": "string",
+                                        "enum": ["PENDING", "ACCEPTED", "REJECTED", "COMPLETED"]
+                                    },
+                                    "purchase_date": {"type": "string", "format": "date-time"},
+                                    "is_active": {"type": "boolean"},
+                                    "is_delivery": {"type": "boolean"},
+                                    "delivery_address": {"type": "string"},
+                                    "delivery_notes": {"type": "string"},
+                                    "completion_image_url": {"type": "string"},
+                                    "listing": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {"type": "integer"},
+                                            "title": {"type": "string"}
+                                        }
+                                    },
+                                    "restaurant": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {"type": "integer"},
+                                            "name": {"type": "string"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "401": {"description": "Unauthorized - Invalid or missing token"},
+        "404": {"description": "Order not found"},
+        "500": {"description": "Internal server error"}
+    }
+})
+def get_order_details(purchase_id):
+    """Get details of a specific order"""
+    user_id = get_jwt_identity()
+    response, status = get_order_details_service(user_id, purchase_id)
     return jsonify(response), status

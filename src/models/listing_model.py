@@ -59,3 +59,23 @@ class Listing(db.Model):
             "available_for_pickup": self.available_for_pickup,
             "available_for_delivery": self.available_for_delivery
         }
+
+    def decrease_stock(self, quantity):
+        """
+        Decreases the listing stock and updates restaurant listing count if needed.
+        Returns True if successful, False if not enough stock.
+        """
+        if self.count < quantity:
+            return False
+
+        self.count -= quantity
+
+        # If count reaches 0, decrease restaurant's listings count
+        if self.count == 0:
+            restaurant = Restaurant.query.get(self.restaurant_id)
+            if restaurant and restaurant.listings > 0:
+                restaurant.listings -= 1
+                db.session.add(restaurant)
+
+        db.session.add(self)
+        return True

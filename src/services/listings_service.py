@@ -76,8 +76,21 @@ def create_listing_service(restaurant_id, owner_id, form_data, file_obj, url_for
         # available_for_pickup and available_for_delivery are set automatically by create()
     )
 
+    restaurant = Restaurant.query.get(restaurant_id)
+    if not restaurant:
+        return {"success": False, "message": f"Restaurant with ID {restaurant_id} not found"}, 404
+    if int(restaurant.owner_id) != int(owner_id):
+        return {"success": False, "message": "You do not own this restaurant"}, 403
+
+    # Create new listing record with all fields
+
+
+    # Increment the restaurant's listings count
+    restaurant.listings += 1
+
     db.session.add(new_listing)
     db.session.commit()
+
 
     return {
         "success": True,

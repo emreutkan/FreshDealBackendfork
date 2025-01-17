@@ -71,3 +71,15 @@ class Restaurant(db.Model):
             total_rating = self.rating * self.ratingCount
             self.ratingCount += 1
             self.rating = (total_rating + new_rating) / self.ratingCount
+
+    def update_listings_count(self, increment=True):
+        """
+        Updates the restaurant's listings count
+        Args:
+            increment (bool): True to increment, False to decrement
+        """
+        if increment:
+            self.listings += 1
+        else:
+            self.listings = max(0, self.listings - 1)
+        db.session.add(self)
