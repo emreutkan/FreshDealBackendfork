@@ -15,6 +15,7 @@ def create_address(user_id, data):
     postal_code = data.get('postalCode')
     apartment_no = data.get('apartmentNo')
     door_no = data.get('doorNo')
+    is_primary = data.get('is_primary')
 
     # Validation
     if not title:
@@ -43,7 +44,6 @@ def create_address(user_id, data):
     is_first_address = existing_address is None
 
     # Set all other addresses to non-primary
-    db.session.query(CustomerAddress).filter_by(user_id=user_id).update({"is_primary": False})
 
     # Create a new address
     new_address = CustomerAddress(
@@ -59,8 +59,12 @@ def create_address(user_id, data):
         postalCode=postal_code,
         apartmentNo=apartment_no,
         doorNo=door_no,
-        is_primary=is_first_address  # Set to True if it's the first address
+        is_primary=is_first_address or is_primary
     )
+
+    if is_first_address or is_primary:
+        db.session.query(CustomerAddress).filter_by(user_id=user_id).update({"is_primary": False})
+
     db.session.add(new_address)
     db.session.commit()
 
@@ -134,11 +138,37 @@ def update_address(user_id, address_id, data):
 
 def delete_address(user_id, address_id):
     address = CustomerAddress.query.filter_by(id=address_id, user_id=user_id).first()
+    next_address = None
 
     if not address:
         return {"message": "Address not found"}, 404
 
-    db.session.delete(address)
-    db.session.commit()
+    # Check if we're deleting a primary address
+    if address.is_primary:
+        # Find the next available address (excluding the one being deleted)
+        next_address = CustomerAddress.query.filter(
+            CustomerAddress.user_id == user_id,
+            CustomerAddress.id != address_id
+        ).first()
 
-    return {"message": "Address successfully deleted!"}, 200
+        if next_address:
+            next_address.is_primary = True
+            db.session.add(next_address)  # Explicitly add the modified address
+
+    # Delete the address
+    db.session.delete(address)
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return {
+            "success": False,
+            "message": f"Failed to delete address: {str(e)}"
+        }, 500
+
+    return {
+        "success": True,
+        "message": "Address deleted successfully!",
+        "new_primary_address_id": next_address.id if next_address else None
+    }, 200

@@ -1,13 +1,19 @@
+from sqlalchemy import and_
+
 from src.models import db, UserCart, Listing, Purchase, Restaurant
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.models.purchase_model import PurchaseStatus
-
-
-def create_purchase_order_service(user_id, delivery_info=None):
+def create_purchase_order_service(user_id, data=None):
     """
-    First step: Creates a pending purchase order
-    """
+     Creates a pending purchase order
+     data format:
+     {
+         "pickup_notes": "note text",  # optional
+         "is_delivery": false,         # required, default false
+         "delivery_address": "address" # required if is_delivery is true
+     }
+     """
     try:
         cart_items = UserCart.query.filter_by(user_id=user_id).all()
 
@@ -15,6 +21,13 @@ def create_purchase_order_service(user_id, delivery_info=None):
             return {"message": "Cart is empty"}, 400
 
         purchases = []
+        cart_items_to_clear = []
+
+        # Get order type and notes from new format
+        is_delivery = data.get('is_delivery', False) if data else False
+        notes = data.get('pickup_notes') if not is_delivery else data.get('delivery_notes')
+        delivery_address = data.get('delivery_address') if is_delivery else None
+
         for item in cart_items:
             listing = item.listing
             if not listing:
@@ -26,41 +39,48 @@ def create_purchase_order_service(user_id, delivery_info=None):
                     "message": f"Cannot purchase {item.count} of {listing.title}. Only {listing.count} left in stock."
                 }, 400
 
-            price_to_use = (listing.pick_up_price if not delivery_info
-                            else listing.delivery_price
-                                 or listing.original_price)
+            # Use appropriate price based on delivery type
+            price_to_use = listing.delivery_price if is_delivery else listing.pick_up_price
+            if price_to_use is None:
+                price_to_use = listing.original_price
 
             total_price = price_to_use * item.count
 
-            # Create pending purchase record
-            purchase = Purchase(
-                user_id=user_id,
-                listing_id=listing.id,
-                quantity=item.count,
-                restaurant_id=listing.restaurant_id,  # Add this line
+            try:
+                purchase = Purchase(
+                    user_id=user_id,
+                    listing_id=listing.id,
+                    quantity=item.count,
+                    restaurant_id=listing.restaurant_id,
+                    total_price=total_price,
+                    status=PurchaseStatus.PENDING,
+                    is_delivery=is_delivery,
+                    delivery_address=delivery_address,
+                    delivery_notes=notes  # Added this line to save the notes
+                )
+            except ValueError as e:
+                db.session.rollback()
+                return {"message": str(e)}, 400
 
-                total_price=total_price,
-                status=PurchaseStatus.PENDING,
-                is_delivery=bool(delivery_info),
-                delivery_address=delivery_info.get('address') if delivery_info else None,
-                delivery_notes=delivery_info.get('notes') if delivery_info else None
-            )
+            # Decrease stock immediately
+            if not listing.decrease_stock(item.count):
+                db.session.rollback()
+                return {
+                    "message": f"Cannot create purchase. Not enough stock available for {listing.title}. Current stock: {listing.count}"
+                }, 400
+
             db.session.add(purchase)
             purchases.append(purchase)
+            cart_items_to_clear.append(item)
+
+        # Clear cart items immediately after creating purchases
+        for item in cart_items_to_clear:
+            db.session.delete(item)
 
         db.session.commit()
         return {
             "message": "Purchase order created successfully, waiting for restaurant approval",
-            "purchases": [
-                {
-                    "purchase_id": p.id,
-                    "listing_id": p.listing_id,
-                    "quantity": p.quantity,
-                    "total_price": str(p.total_price),
-                    "status": p.status.value
-                }
-                for p in purchases
-            ]
+            "purchases": [p.to_dict() for p in purchases]  # Using new to_dict method
         }, 201
 
     except Exception as e:
@@ -77,44 +97,36 @@ def handle_restaurant_response_service(purchase_id, restaurant_id, action, compl
         if not purchase:
             return {"message": "Purchase not found"}, 404
 
-        # Verify the restaurant owns this listing
         if purchase.listing.restaurant_id != restaurant_id:
             return {"message": "Unauthorized"}, 403
 
         if action not in ['accept', 'reject']:
             return {"message": "Invalid action"}, 400
 
-        if action == 'accept':
-            purchase.status = PurchaseStatus.ACCEPTED
+        try:
+            new_status = PurchaseStatus.ACCEPTED if action == 'accept' else PurchaseStatus.REJECTED
+            purchase.update_status(new_status)  # Using new status transition validation
 
-            # Handle the actual stock reduction here
-            listing = purchase.listing
-            listing.count -= purchase.quantity
-            if listing.count == 0:
-                restaurant = Restaurant.query.get(listing.restaurant_id)
-                if restaurant and restaurant.listings > 0:
-                    restaurant.listings -= 1
+            if action == 'reject':
+                # Restore stock when rejected
+                purchase.listing.count += purchase.quantity
 
-            # Clear cart items
-            UserCart.query.filter_by(
-                user_id=purchase.user_id,
-                listing_id=purchase.listing_id
-            ).delete()
+            db.session.commit()
+            return {
+                "message": f"Purchase {action}ed successfully",
+                "purchase": purchase.to_dict(include_relations=True)  # Using enhanced to_dict
+            }, 200
 
-        else:  # reject
-            purchase.status = PurchaseStatus.REJECTED
+        except ValueError as e:
+            db.session.rollback()
+            return {"message": str(e)}, 400
 
-        db.session.commit()
-        return {
-            "message": f"Purchase {action}ed successfully",
-            "purchase_id": purchase.id,
-            "status": purchase.status.value
-        }, 200
-
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return {"message": "Database error occurred", "error": str(e)}, 500
     except Exception as e:
         db.session.rollback()
         return {"message": "An error occurred", "error": str(e)}, 500
-
 
 def add_completion_image_service(purchase_id, restaurant_id, image_url):
     """
@@ -128,18 +140,19 @@ def add_completion_image_service(purchase_id, restaurant_id, image_url):
         if purchase.listing.restaurant_id != restaurant_id:
             return {"message": "Unauthorized"}, 403
 
-        if purchase.status != PurchaseStatus.ACCEPTED:
-            return {"message": "Purchase must be accepted to add completion image"}, 400
+        try:
+            purchase.completion_image_url = image_url
+            purchase.update_status(PurchaseStatus.COMPLETED)  # Using new status transition validation
+            db.session.commit()
 
-        purchase.completion_image_url = image_url
-        purchase.status = PurchaseStatus.COMPLETED
-        db.session.commit()
+            return {
+                "message": "Completion image added successfully",
+                "purchase": purchase.to_dict(include_relations=True)  # Using enhanced to_dict
+            }, 200
 
-        return {
-            "message": "Completion image added successfully",
-            "purchase_id": purchase.id,
-            "image_url": image_url
-        }, 200
+        except ValueError as e:
+            db.session.rollback()
+            return {"message": str(e)}, 400
 
     except Exception as e:
         db.session.rollback()
@@ -155,6 +168,122 @@ def get_restaurant_purchases_service(restaurant_id):
         purchases = Purchase.get_restaurant_purchases(restaurant_id)
         return {
             "purchases": [purchase.to_dict() for purchase in purchases]
+        }, 200
+    except Exception as e:
+        return {"message": "An error occurred", "error": str(e)}, 500
+
+
+def get_user_active_orders_service(user_id):
+    """
+    Get all active orders for a user (PENDING, ACCEPTED)
+    """
+    try:
+        # Use the class method from the updated Purchase model
+        active_orders = Purchase.get_active_purchases_for_user(user_id)
+
+        return {
+            "active_orders": [
+                {
+                    "purchase_id": order.id,
+                    "restaurant_name": order.restaurant.restaurantName,
+                    "listing_title": order.listing.title,
+                    "quantity": order.quantity,
+                    "total_price": order.formatted_total_price,  # Using new formatted_total_price property
+                    "status": order.status.value,
+                    "purchase_date": order.purchase_date.isoformat(),
+                    "is_active": order.is_active,  # Added new property
+                    "is_delivery": order.is_delivery,
+                    "delivery_address": order.delivery_address if order.is_delivery else None,
+                    "delivery_notes": order.delivery_notes if order.is_delivery else None,
+                    "restaurant_details": {
+                        "id": order.restaurant.id,
+                        "name": order.restaurant.restaurantName,
+                        "image_url": order.restaurant.image_url
+                    }
+                }
+                for order in active_orders
+            ]
+        }, 200
+    except Exception as e:
+        return {"message": "An error occurred", "error": str(e)}, 500
+
+
+def get_user_previous_orders_service(user_id, page=1, per_page=10):
+    """
+    Get completed or rejected orders for a user with pagination
+    """
+    try:
+        # Calculate offset
+        offset = (page - 1) * per_page
+
+        # Query for completed and rejected orders
+        previous_orders = Purchase.query.filter(
+            and_(
+                Purchase.user_id == user_id,
+                Purchase.status.in_([PurchaseStatus.COMPLETED, PurchaseStatus.REJECTED])
+            )
+        ).order_by(Purchase.purchase_date.desc()) \
+            .offset(offset) \
+            .limit(per_page) \
+            .all()
+
+        # Get total count for pagination
+        total_orders = Purchase.query.filter(
+            and_(
+                Purchase.user_id == user_id,
+                Purchase.status.in_([PurchaseStatus.COMPLETED, PurchaseStatus.REJECTED])
+            )
+        ).count()
+
+        # Calculate pagination metadata
+        total_pages = (total_orders + per_page - 1) // per_page
+        has_next = page < total_pages
+        has_prev = page > 1
+
+        return {
+            "orders": [
+                order.to_dict(include_relations=True)  # Using enhanced to_dict method
+                for order in previous_orders
+            ],
+            "pagination": {
+                "current_page": page,
+                "total_pages": total_pages,
+                "per_page": per_page,
+                "total_orders": total_orders,
+                "has_next": has_next,
+                "has_prev": has_prev
+            }
+        }, 200
+    except Exception as e:
+        return {"message": "An error occurred", "error": str(e)}, 500
+
+
+# Add these helper methods to make the code more maintainable
+def get_paginated_orders_query(user_id, status_list):
+    """
+    Helper method to create a base query for orders with specific statuses
+    """
+    return Purchase.query.filter(
+        and_(
+            Purchase.user_id == user_id,
+            Purchase.status.in_(status_list)
+        )
+    ).order_by(Purchase.purchase_date.desc())
+
+
+# You might also want to add this new service for getting order details
+def get_order_details_service(user_id, purchase_id):
+    """
+    Get detailed information about a specific order
+    """
+    try:
+        order = Purchase.query.filter_by(id=purchase_id, user_id=user_id).first()
+
+        if not order:
+            return {"message": "Order not found"}, 404
+
+        return {
+            "order": order.to_dict(include_relations=True)
         }, 200
     except Exception as e:
         return {"message": "An error occurred", "error": str(e)}, 500

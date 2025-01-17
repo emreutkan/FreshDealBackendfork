@@ -1,6 +1,8 @@
 import re
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
+
+from src.services.purchase_service import get_user_active_orders_service
 from src.services.user_services import (
     fetch_user_data,
     change_password,
@@ -473,3 +475,9 @@ def remove_favorite_route():
             "message": "An error occurred",
             "error": str(e)
         }), 500
+
+@user_bp.route('/users/active-orders', methods=['GET'])
+@jwt_required()  # Assuming you're using Flask-JWT-Extended
+def get_user_active_orders():
+    current_user_id = get_jwt_identity()  # Get the current user's ID
+    return get_user_active_orders_service(current_user_id)
