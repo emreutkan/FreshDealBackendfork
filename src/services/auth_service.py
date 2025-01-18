@@ -98,7 +98,7 @@ def login_user(data, client_ip):
             logger.info("Password missing for password login.")
             return {"success": False, "message": "Password is required for login."}, 400
         if check_password_hash(user.password, password):
-            token = create_access_token(identity=str(user.id))
+            token = create_access_token(identity=str(user.id), expires_delta=False)
             logger.info(f"User_id {user.id} authenticated successfully with password.")
             return {"success": True, "token": token}, 200
         else:

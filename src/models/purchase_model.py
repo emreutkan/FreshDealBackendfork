@@ -136,7 +136,8 @@ class Purchase(db.Model):
             "is_delivery": self.is_delivery,
             "delivery_address": self.delivery_address,
             "delivery_notes": self.delivery_notes,
-            "completion_image_url": self.completion_image_url
+            "completion_image_url": self.completion_image_url,
+            "restaurant_id": self.restaurant_id,
         }
 
         if include_relations:

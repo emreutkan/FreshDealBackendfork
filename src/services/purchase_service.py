@@ -44,7 +44,15 @@ def create_purchase_order_service(user_id, data=None):
             if price_to_use is None:
                 price_to_use = listing.original_price
 
-            total_price = price_to_use * item.count
+
+            restaurant = Restaurant.query.get(listing.restaurant_id)
+            if not restaurant:
+                return {"message": f"Restaurant (ID: {listing.restaurant_id}) not found"}, 404
+
+            delivery_fee = restaurant.deliveryFee if is_delivery else 1
+
+            # delivery_fee = listing.restaurant.delivery_fee if is_delivery else 1
+            total_price = price_to_use * item.count * delivery_fee
 
             try:
                 purchase = Purchase(
