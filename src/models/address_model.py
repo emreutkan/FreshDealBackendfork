@@ -13,7 +13,7 @@ class CustomerAddress(db.Model):
     district = db.Column(String(80), nullable=True)
     province = db.Column(String(80), nullable=True)
     country = db.Column(String(80), nullable=True)
-    postalCode = db.Column(Integer, nullable=True)
+    postalCode = db.Column(String(10), nullable=True)  # Changed from Integer to String(10)
     apartmentNo = db.Column(Integer, nullable=True)
     doorNo = db.Column(String(6), nullable=True)
     is_primary = db.Column(Boolean, nullable=False, default=False)

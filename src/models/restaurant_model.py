@@ -15,7 +15,7 @@ class Restaurant(db.Model):
     latitude = db.Column(DECIMAL(9, 6), nullable=False)
     category = db.Column(String(80), nullable=False)
 
-    workingDays = db.Column(String(56), nullable=True)
+    workingDays = db.Column(String(500), nullable=True)
     workingHoursStart = db.Column(String(5), nullable=True)
     workingHoursEnd = db.Column(String(5), nullable=True)
 
