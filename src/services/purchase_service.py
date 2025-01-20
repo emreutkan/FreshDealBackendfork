@@ -1,4 +1,8 @@
+import os
+import uuid
+
 from sqlalchemy import and_
+from werkzeug.utils import secure_filename
 
 from src.models import db, UserCart, Listing, Purchase, Restaurant
 from sqlalchemy.exc import SQLAlchemyError
@@ -96,74 +100,61 @@ def create_purchase_order_service(user_id, data=None):
         return {"message": "An error occurred", "error": str(e)}, 500
 
 
-def handle_restaurant_response_service(purchase_id, restaurant_id, action, completion_image=None):
+def handle_restaurant_response_service(purchase_id, owner_id, action, completion_image=None):
     """
-    Second step: Restaurant accepts or rejects the order
+    Second step: Restaurant accepts or rejects the order.
+    The JWT token provides the owner's id rather than the restaurant id.
     """
     try:
         purchase = Purchase.query.get(purchase_id)
         if not purchase:
+            print(f"[DEBUG] Purchase with id {purchase_id} not found.")
             return {"message": "Purchase not found"}, 404
 
-        if purchase.listing.restaurant_id != restaurant_id:
+        # Debug prints for owner check
+        print(f"[DEBUG] Received owner_id (from token): {owner_id} (type: {type(owner_id)})")
+
+        # Retrieve the restaurant using the listing's restaurant_id
+        restaurant = Restaurant.query.get(purchase.listing.restaurant_id)
+        if not restaurant:
+            print(f"[DEBUG] Restaurant with id {purchase.listing.restaurant_id} not found.")
+            return {"message": "Associated restaurant not found"}, 404
+
+        print(f"[DEBUG] Restaurant's owner_id: {restaurant.owner_id} (type: {type(restaurant.owner_id)})")
+
+        if int(owner_id) != int(restaurant.owner_id):
+            print("[DEBUG] Unauthorized: The owner_id from token does not match the restaurant owner_id.")
             return {"message": "Unauthorized"}, 403
 
         if action not in ['accept', 'reject']:
+            print(f"[DEBUG] Invalid action provided: {action}")
             return {"message": "Invalid action"}, 400
 
         try:
             new_status = PurchaseStatus.ACCEPTED if action == 'accept' else PurchaseStatus.REJECTED
-            purchase.update_status(new_status)  # Using new status transition validation
+            print(f"[DEBUG] Updating purchase status to: {new_status}")
+            purchase.update_status(new_status)
 
             if action == 'reject':
                 # Restore stock when rejected
+                print(f"[DEBUG] Restoring stock. Before: {purchase.listing.count}, Adding back: {purchase.quantity}")
                 purchase.listing.count += purchase.quantity
 
             db.session.commit()
+            print(f"[DEBUG] Purchase {action}ed successfully.")
             return {
                 "message": f"Purchase {action}ed successfully",
-                "purchase": purchase.to_dict(include_relations=True)  # Using enhanced to_dict
+                "purchase": purchase.to_dict(include_relations=True)
             }, 200
 
         except ValueError as e:
             db.session.rollback()
-            return {"message": str(e)}, 400
-
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        return {"message": "Database error occurred", "error": str(e)}, 500
-    except Exception as e:
-        db.session.rollback()
-        return {"message": "An error occurred", "error": str(e)}, 500
-
-def add_completion_image_service(purchase_id, restaurant_id, image_url):
-    """
-    Add completion image to an accepted purchase
-    """
-    try:
-        purchase = Purchase.query.get(purchase_id)
-        if not purchase:
-            return {"message": "Purchase not found"}, 404
-
-        if purchase.listing.restaurant_id != restaurant_id:
-            return {"message": "Unauthorized"}, 403
-
-        try:
-            purchase.completion_image_url = image_url
-            purchase.update_status(PurchaseStatus.COMPLETED)  # Using new status transition validation
-            db.session.commit()
-
-            return {
-                "message": "Completion image added successfully",
-                "purchase": purchase.to_dict(include_relations=True)  # Using enhanced to_dict
-            }, 200
-
-        except ValueError as e:
-            db.session.rollback()
+            print(f"[DEBUG] ValueError during status update: {e}")
             return {"message": str(e)}, 400
 
     except Exception as e:
         db.session.rollback()
+        print(f"[DEBUG] General Exception: {e}")
         return {"message": "An error occurred", "error": str(e)}, 500
 
 # In your purchase_service.py
@@ -294,4 +285,101 @@ def get_order_details_service(user_id, purchase_id):
             "order": order.to_dict(include_relations=True)
         }, 200
     except Exception as e:
+        return {"message": "An error occurred", "error": str(e)}, 500
+
+
+# Define the absolute path for the upload folder (adjust as needed)
+# You might share this with your listings_service or define it in a common config file.
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'routes', 'uploads')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webm'}
+
+# Ensure the upload directory exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def allowed_file(filename):
+    """Return True if the filename has an allowed extension."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def add_completion_image_service(purchase_id, owner_id, file_obj, url_for_func):
+    """
+    Process the uploaded completion image file for a purchase.
+
+    - Validates that the file is provided and has an allowed extension.
+    - Saves the file with a unique filename in the upload folder.
+    - Constructs the image URL using url_for_func.
+    - Validates that the purchase exists and the current owner (from token)
+      owns the associated restaurant.
+    - Updates the purchase's completion image URL and status to COMPLETED.
+    """
+    try:
+        # Retrieve the purchase record
+        purchase = Purchase.query.get(purchase_id)
+        if not purchase:
+            print(f"[DEBUG] Purchase with id {purchase_id} not found.")
+            return {"message": "Purchase not found"}, 404
+
+        # Retrieve the associated restaurant using the listing's restaurant_id
+        restaurant = Restaurant.query.get(purchase.listing.restaurant_id)
+        if not restaurant:
+            print(f"[DEBUG] Restaurant with id {purchase.listing.restaurant_id} not found.")
+            return {"message": "Associated restaurant not found"}, 404
+
+        # Debug: print owner IDs for verification
+        print(f"[DEBUG] Received owner_id (from token): {owner_id} (type: {type(owner_id)})")
+        print(f"[DEBUG] Restaurant's owner_id: {restaurant.owner_id} (type: {type(restaurant.owner_id)})")
+        if int(owner_id) != int(restaurant.owner_id):
+            print("[DEBUG] Unauthorized: The owner_id from token does not match the restaurant owner_id.")
+            return {"message": "Unauthorized"}, 403
+
+        # Handle the file upload
+        if not file_obj:
+            print("[DEBUG] No file object provided.")
+            return {"message": "No file provided"}, 400
+
+        if not allowed_file(file_obj.filename):
+            print(f"[DEBUG] File {file_obj.filename} has an invalid extension.")
+            return {"message": "Invalid file type"}, 400
+
+        # Secure the filename and create a unique filename
+        original_filename = secure_filename(file_obj.filename)
+        unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
+        filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
+
+        # Save the file to the upload folder
+        try:
+            file_obj.save(filepath)
+            print(f"[DEBUG] File saved to {filepath}")
+        except Exception as e:
+            print(f"[DEBUG] Error saving file: {e}")
+            return {"message": "Error saving file", "error": str(e)}, 500
+
+        # Construct the image URL using the provided url_for_func
+        image_url = url_for_func('api_v1.listings.get_uploaded_file', filename=unique_filename, _external=True)
+        print(f"[DEBUG] Constructed image URL: {image_url}")
+
+        try:
+            # Update purchase's completion image URL and status
+            purchase.completion_image_url = image_url
+            print("[DEBUG] Setting completion image URL on purchase.")
+            purchase.update_status(PurchaseStatus.COMPLETED)
+            print("[DEBUG] Updating purchase status to COMPLETED.")
+
+            db.session.commit()
+            print("[DEBUG] Completion image added and purchase updated successfully.")
+            return {
+                "message": "Completion image added successfully",
+                "purchase": purchase.to_dict(include_relations=True)
+            }, 200
+
+        except ValueError as e:
+            db.session.rollback()
+            print(f"[DEBUG] ValueError during purchase update: {e}")
+            return {"message": str(e)}, 400
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[DEBUG] General Exception: {e}")
         return {"message": "An error occurred", "error": str(e)}, 500

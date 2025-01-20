@@ -64,9 +64,11 @@ class Restaurant(db.Model):
 
     def update_rating(self, new_rating):
         """Update the restaurant's average rating and rating count."""
+        from decimal import Decimal
+        new_rating = Decimal(str(new_rating))
         if self.rating is None:
-            self.rating = new_rating
-            self.ratingCount = 1
+                self.rating = new_rating
+                self.ratingCount = 1
         else:
             total_rating = self.rating * self.ratingCount
             self.ratingCount += 1

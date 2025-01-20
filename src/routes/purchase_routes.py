@@ -1,21 +1,32 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, url_for
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flasgger import swag_from
+
 from src.services.purchase_service import (
     create_purchase_order_service,
     handle_restaurant_response_service,
     add_completion_image_service,
-    get_restaurant_purchases_service, get_order_details_service, get_user_previous_orders_service,
-    get_user_active_orders_service
+    get_restaurant_purchases_service,
+    get_user_active_orders_service,
+    get_user_previous_orders_service,
+    get_order_details_service,
 )
 
 purchase_bp = Blueprint("purchase", __name__)
+
+
 @purchase_bp.route("/purchase", methods=["POST"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
     "summary": "Create a new purchase order from cart items",
-    "description": "Creates purchase orders for all items in the user's cart. Supports both pickup and delivery orders.",
+    "description": (
+        "Creates one or more purchase orders for all items in the user's cart. "
+        "If the cart is empty or any item exceeds available stock, the request will fail. "
+        "The resulting purchase orders will have a **PENDING** status until the restaurant accepts or rejects them. "
+        "If `is_delivery = false`, you can optionally include `pickup_notes`. "
+        "If `is_delivery = true`, you **must** provide `delivery_address`, and you can optionally include `delivery_notes`."
+    ),
     "security": [{"BearerAuth": []}],
     "requestBody": {
         "required": True,
@@ -28,40 +39,39 @@ purchase_bp = Blueprint("purchase", __name__)
                         "is_delivery": {
                             "type": "boolean",
                             "description": "Flag to indicate if this is a delivery order",
-                            "default": False,
                             "example": False
                         },
                         "pickup_notes": {
                             "type": "string",
-                            "description": "Optional notes for pickup orders",
+                            "description": "Optional notes for pickup orders (ignored if is_delivery=true)",
                             "example": "Will pick up at 6pm"
                         },
                         "delivery_address": {
                             "type": "string",
-                            "description": "Required only when is_delivery is true",
-                            "example": "123 Main St, City"
+                            "description": "Required only if is_delivery=true",
+                            "example": "123 Main St, YourCity"
                         },
                         "delivery_notes": {
                             "type": "string",
                             "description": "Optional notes for delivery orders",
-                            "example": "Please leave at door"
+                            "example": "Please leave at the back door"
                         }
                     }
                 },
                 "examples": {
                     "pickup_order": {
-                        "summary": "Pickup Order Example",
+                        "summary": "Example (Pickup)",
                         "value": {
                             "is_delivery": False,
                             "pickup_notes": "Will pick up at 6pm"
                         }
                     },
                     "delivery_order": {
-                        "summary": "Delivery Order Example",
+                        "summary": "Example (Delivery)",
                         "value": {
                             "is_delivery": True,
-                            "delivery_address": "123 Main St, City",
-                            "delivery_notes": "Please leave at door"
+                            "delivery_address": "123 Main St, YourCity",
+                            "delivery_notes": "Please leave at the back door"
                         }
                     }
                 }
@@ -85,35 +95,18 @@ purchase_bp = Blueprint("purchase", __name__)
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "id": {
-                                            "type": "integer",
-                                            "example": 1
-                                        },
-                                        "listing_id": {
-                                            "type": "integer",
-                                            "example": 1
-                                        },
-                                        "quantity": {
-                                            "type": "integer",
-                                            "example": 2
-                                        },
-                                        "total_price": {
-                                            "type": "string",
-                                            "example": "25.99"
-                                        },
+                                        "id": {"type": "integer", "example": 101},
+                                        "listing_id": {"type": "integer", "example": 12},
+                                        "quantity": {"type": "integer", "example": 2},
+                                        "total_price": {"type": "string", "example": "25.99"},
                                         "status": {
                                             "type": "string",
                                             "enum": ["PENDING", "ACCEPTED", "REJECTED", "COMPLETED"],
                                             "example": "PENDING"
                                         },
-                                        "is_delivery": {
-                                            "type": "boolean",
-                                            "example": False
-                                        },
-                                        "order_notes": {
-                                            "type": "string",
-                                            "example": "Will pick up at 6pm"
-                                        }
+                                        "is_delivery": {"type": "boolean", "example": False},
+                                        "delivery_address": {"type": "string", "example": None},
+                                        "delivery_notes": {"type": "string", "example": None}
                                     }
                                 }
                             }
@@ -123,7 +116,7 @@ purchase_bp = Blueprint("purchase", __name__)
             }
         },
         "400": {
-            "description": "Bad Request",
+            "description": "Bad Request (e.g., Cart is empty or insufficient stock)",
             "content": {
                 "application/json": {
                     "schema": {
@@ -131,7 +124,7 @@ purchase_bp = Blueprint("purchase", __name__)
                         "properties": {
                             "message": {
                                 "type": "string",
-                                "example": "Cart is empty or delivery address required for delivery orders"
+                                "example": "Cart is empty or insufficient stock for some listing."
                             }
                         }
                     }
@@ -139,35 +132,27 @@ purchase_bp = Blueprint("purchase", __name__)
             }
         },
         "401": {
-            "description": "Unauthorized",
+            "description": "Unauthorized - Missing or invalid authorization token",
             "content": {
                 "application/json": {
                     "schema": {
                         "type": "object",
                         "properties": {
-                            "msg": {
-                                "type": "string",
-                                "example": "Missing authorization header"
-                            }
+                            "msg": {"type": "string", "example": "Missing Authorization Header"}
                         }
                     }
                 }
             }
         },
         "500": {
-            "description": "Internal Server Error",
+            "description": "Internal server error",
             "content": {
                 "application/json": {
                     "schema": {
                         "type": "object",
                         "properties": {
-                            "message": {
-                                "type": "string",
-                                "example": "An error occurred"
-                            },
-                            "error": {
-                                "type": "string"
-                            }
+                            "message": {"type": "string", "example": "An error occurred"},
+                            "error": {"type": "string", "example": "Traceback or error details"}
                         }
                     }
                 }
@@ -181,12 +166,17 @@ def create_purchase_order():
     response, status = create_purchase_order_service(user_id, data)
     return jsonify(response), status
 
+
 @purchase_bp.route("/purchase/<int:purchase_id>/response", methods=["POST"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
-    "summary": "Restaurant response to purchase order",
-    "description": "Allow restaurant to accept or reject a pending purchase order",
+    "summary": "Restaurant response to a purchase order",
+    "description": (
+        "Allows the restaurant (owner) to accept or reject a **PENDING** purchase order. "
+        "If the order is **rejected**, stock is restored. "
+        "If the current user is not the owner of the restaurant associated with this purchase, the request is forbidden."
+    ),
     "security": [{"BearerAuth": []}],
     "parameters": [
         {
@@ -194,7 +184,8 @@ def create_purchase_order():
             "in": "path",
             "schema": {"type": "integer"},
             "required": True,
-            "description": "ID of the purchase order"
+            "description": "ID of the purchase order to respond to",
+            "example": 101
         }
     ],
     "requestBody": {
@@ -210,6 +201,9 @@ def create_purchase_order():
                             "enum": ["accept", "reject"],
                             "description": "Action to take on the purchase order"
                         }
+                    },
+                    "example": {
+                        "action": "accept"
                     }
                 }
             }
@@ -223,20 +217,45 @@ def create_purchase_order():
                     "schema": {
                         "type": "object",
                         "properties": {
-                            "message": {"type": "string"},
-                            "purchase_id": {"type": "integer"},
-                            "status": {
-                                "type": "string",
-                                "enum": ["pending", "accepted", "rejected", "completed"]
+                            "message": {"type": "string", "example": "Purchase accepted successfully"},
+                            "purchase": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer", "example": 101},
+                                    "status": {
+                                        "type": "string",
+                                        "enum": ["PENDING", "ACCEPTED", "REJECTED", "COMPLETED"],
+                                        "example": "ACCEPTED"
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         },
-        "403": {"description": "Unauthorized - Restaurant doesn't own this listing"},
-        "404": {"description": "Purchase order not found"},
-        "500": {"description": "Internal server error"}
+        "400": {
+            "description": "Invalid action or purchase is not in a valid state",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "message": {"type": "string"}
+                        }
+                    }
+                }
+            }
+        },
+        "403": {
+            "description": "Forbidden - The current user is not the restaurant owner for this purchase"
+        },
+        "404": {
+            "description": "Purchase not found"
+        },
+        "500": {
+            "description": "Internal server error"
+        }
     }
 })
 def restaurant_response(purchase_id):
@@ -249,77 +268,25 @@ def restaurant_response(purchase_id):
     )
     return jsonify(response), status
 
-@purchase_bp.route("/purchase/<int:purchase_id>/completion-image", methods=["POST"])
-@jwt_required()
-@swag_from({
-    "tags": ["Purchases"],
-    "summary": "Add completion image to purchase",
-    "description": "Allow restaurant to add a completion image to an accepted purchase",
-    "security": [{"BearerAuth": []}],
-    "parameters": [
-        {
-            "name": "purchase_id",
-            "in": "path",
-            "schema": {"type": "integer"},
-            "required": True,
-            "description": "ID of the purchase order"
-        }
-    ],
-    "requestBody": {
-        "required": True,
-        "content": {
-            "application/json": {
-                "schema": {
-                    "type": "object",
-                    "required": ["image_url"],
-                    "properties": {
-                        "image_url": {
-                            "type": "string",
-                            "description": "URL of the uploaded completion image"
-                        }
-                    }
-                }
-            }
-        }
-    },
-    "responses": {
-        "200": {
-            "description": "Successfully added completion image",
-            "content": {
-                "application/json": {
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "message": {"type": "string"},
-                            "purchase_id": {"type": "integer"},
-                            "image_url": {"type": "string"}
-                        }
-                    }
-                }
-            }
-        },
-        "400": {"description": "Purchase must be in accepted state"},
-        "403": {"description": "Unauthorized - Restaurant doesn't own this listing"},
-        "404": {"description": "Purchase order not found"},
-        "500": {"description": "Internal server error"}
-    }
-})
-def add_completion_image(purchase_id):
-    restaurant_id = get_jwt_identity()
-    image_url = request.json.get('image_url')
-    response, status = add_completion_image_service(
-        purchase_id,
-        restaurant_id,
-        image_url
-    )
-    return jsonify(response), status
+
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from flasgger import swag_from
+
+purchase_bp = Blueprint("purchase", __name__)
+
+
+
 
 @purchase_bp.route("/restaurant/<int:restaurant_id>/purchases", methods=["GET"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
-    "summary": "Get restaurant purchases",
-    "description": "Retrieve all purchases for a specific restaurant",
+    "summary": "Get all purchases for a restaurant",
+    "description": (
+        "Retrieves all purchase orders linked to a specific restaurant. "
+        "Typically, only the restaurant owner should be allowed to view these orders."
+    ),
     "security": [{"BearerAuth": []}],
     "parameters": [
         {
@@ -327,7 +294,8 @@ def add_completion_image(purchase_id):
             "in": "path",
             "schema": {"type": "integer"},
             "required": True,
-            "description": "ID of the restaurant"
+            "description": "ID of the restaurant",
+            "example": 5
         }
     ],
     "responses": {
@@ -343,21 +311,29 @@ def add_completion_image(purchase_id):
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "id": {"type": "integer"},
-                                        "user_id": {"type": "integer"},
-                                        "listing_id": {"type": "integer"},
-                                        "listing_title": {"type": "string"},
-                                        "quantity": {"type": "integer"},
-                                        "total_price": {"type": "string"},
-                                        "purchase_date": {"type": "string", "format": "date-time"},
+                                        "id": {"type": "integer", "example": 101},
+                                        "user_id": {"type": "integer", "example": 7},
+                                        "listing_id": {"type": "integer", "example": 12},
+                                        "listing_title": {"type": "string", "example": "Box of cupcakes"},
+                                        "quantity": {"type": "integer", "example": 2},
+                                        "total_price": {"type": "string", "example": "25.99"},
+                                        "purchase_date": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "example": "2025-01-19T12:34:56"
+                                        },
                                         "status": {
                                             "type": "string",
-                                            "enum": ["pending", "accepted", "rejected", "completed"]
+                                            "enum": ["PENDING", "ACCEPTED", "REJECTED", "COMPLETED"],
+                                            "example": "PENDING"
                                         },
-                                        "is_delivery": {"type": "boolean"},
-                                        "delivery_address": {"type": "string"},
-                                        "delivery_notes": {"type": "string"},
-                                        "completion_image_url": {"type": "string"}
+                                        "is_delivery": {"type": "boolean", "example": False},
+                                        "delivery_address": {"type": "string", "example": None},
+                                        "delivery_notes": {"type": "string", "example": None},
+                                        "completion_image_url": {
+                                            "type": "string",
+                                            "example": "https://example.com/uploads/order-101.png"
+                                        }
                                     }
                                 }
                             }
@@ -372,16 +348,19 @@ def add_completion_image(purchase_id):
     }
 })
 def get_restaurant_purchases(restaurant_id):
-    """Get all purchases for a restaurant"""
     response, status = get_restaurant_purchases_service(restaurant_id)
     return jsonify(response), status
+
 
 @purchase_bp.route("/purchases/<int:purchase_id>/accept", methods=["POST"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
-    "summary": "Accept purchase order",
-    "description": "Restaurant owner accepts a pending purchase order",
+    "summary": "Accept a purchase order",
+    "description": (
+        "Allows the restaurant owner to explicitly accept a **PENDING** purchase order. "
+        "Once accepted, the purchase can later be marked as completed with a completion image."
+    ),
     "security": [{"BearerAuth": []}],
     "parameters": [
         {
@@ -389,7 +368,8 @@ def get_restaurant_purchases(restaurant_id):
             "in": "path",
             "schema": {"type": "integer"},
             "required": True,
-            "description": "ID of the purchase order"
+            "description": "ID of the purchase order to accept",
+            "example": 101
         }
     ],
     "responses": {
@@ -400,36 +380,55 @@ def get_restaurant_purchases(restaurant_id):
                     "schema": {
                         "type": "object",
                         "properties": {
-                            "message": {"type": "string"},
-                            "purchase_id": {"type": "integer"},
-                            "status": {
-                                "type": "string",
-                                "enum": ["accepted"]
+                            "message": {"type": "string", "example": "Purchase accepted successfully"},
+                            "purchase": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer", "example": 101},
+                                    "status": {
+                                        "type": "string",
+                                        "enum": ["ACCEPTED"],
+                                        "example": "ACCEPTED"
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         },
-        "400": {"description": "Purchase cannot be accepted (wrong state)"},
-        "401": {"description": "Unauthorized - Invalid or missing token"},
-        "403": {"description": "Forbidden - User is not the restaurant owner"},
-        "404": {"description": "Purchase not found"},
-        "500": {"description": "Internal server error"}
+        "400": {
+            "description": "Purchase cannot be accepted (e.g., already rejected or completed)"
+        },
+        "401": {
+            "description": "Unauthorized - Invalid or missing token"
+        },
+        "403": {
+            "description": "Forbidden - Current user is not the restaurant owner"
+        },
+        "404": {
+            "description": "Purchase not found"
+        },
+        "500": {
+            "description": "Internal server error"
+        }
     }
 })
 def accept_purchase(purchase_id):
-    """Accept a purchase order"""
     restaurant_id = get_jwt_identity()
     response, status = handle_restaurant_response_service(purchase_id, restaurant_id, 'accept')
     return jsonify(response), status
+
 
 @purchase_bp.route("/purchases/<int:purchase_id>/reject", methods=["POST"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
-    "summary": "Reject purchase order",
-    "description": "Restaurant owner rejects a pending purchase order",
+    "summary": "Reject a purchase order",
+    "description": (
+        "Allows the restaurant owner to explicitly reject a **PENDING** purchase order. "
+        "Once rejected, the stock is restored for the associated listing."
+    ),
     "security": [{"BearerAuth": []}],
     "parameters": [
         {
@@ -437,7 +436,8 @@ def accept_purchase(purchase_id):
             "in": "path",
             "schema": {"type": "integer"},
             "required": True,
-            "description": "ID of the purchase order"
+            "description": "ID of the purchase order to reject",
+            "example": 101
         }
     ],
     "responses": {
@@ -448,36 +448,55 @@ def accept_purchase(purchase_id):
                     "schema": {
                         "type": "object",
                         "properties": {
-                            "message": {"type": "string"},
-                            "purchase_id": {"type": "integer"},
-                            "status": {
-                                "type": "string",
-                                "enum": ["rejected"]
+                            "message": {"type": "string", "example": "Purchase rejected successfully"},
+                            "purchase": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer", "example": 101},
+                                    "status": {
+                                        "type": "string",
+                                        "enum": ["REJECTED"],
+                                        "example": "REJECTED"
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         },
-        "400": {"description": "Purchase cannot be rejected (wrong state)"},
-        "401": {"description": "Unauthorized - Invalid or missing token"},
-        "403": {"description": "Forbidden - User is not the restaurant owner"},
-        "404": {"description": "Purchase not found"},
-        "500": {"description": "Internal server error"}
+        "400": {
+            "description": "Purchase cannot be rejected (already accepted or completed)"
+        },
+        "401": {
+            "description": "Unauthorized - Invalid or missing token"
+        },
+        "403": {
+            "description": "Forbidden - Current user is not the restaurant owner"
+        },
+        "404": {
+            "description": "Purchase not found"
+        },
+        "500": {
+            "description": "Internal server error"
+        }
     }
 })
 def reject_purchase(purchase_id):
-    """Reject a purchase order"""
     restaurant_id = get_jwt_identity()
     response, status = handle_restaurant_response_service(purchase_id, restaurant_id, 'reject')
     return jsonify(response), status
+
 
 @purchase_bp.route("/user/orders/active", methods=["GET"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
     "summary": "Get user's active orders",
-    "description": "Retrieve all active (pending and accepted) orders for the current user",
+    "description": (
+        "Retrieves all active (PENDING or ACCEPTED) orders for the current user. "
+        "Active orders are those that have not been completed or rejected yet."
+    ),
     "security": [{"BearerAuth": []}],
     "responses": {
         "200": {
@@ -492,27 +511,31 @@ def reject_purchase(purchase_id):
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "purchase_id": {"type": "integer"},
-                                        "restaurant_name": {"type": "string"},
-                                        "listing_title": {"type": "string"},
-                                        "quantity": {"type": "integer"},
-                                        "total_price": {"type": "string"},
-                                        "formatted_total_price": {"type": "string"},
+                                        "purchase_id": {"type": "integer", "example": 101},
+                                        "restaurant_name": {"type": "string", "example": "Cupcake Heaven"},
+                                        "listing_title": {"type": "string", "example": "Box of cupcakes"},
+                                        "quantity": {"type": "integer", "example": 2},
+                                        "total_price": {"type": "string", "example": "25.99"},
                                         "status": {
                                             "type": "string",
-                                            "enum": ["PENDING", "ACCEPTED"]
+                                            "enum": ["PENDING", "ACCEPTED"],
+                                            "example": "PENDING"
                                         },
-                                        "purchase_date": {"type": "string", "format": "date-time"},
-                                        "is_active": {"type": "boolean"},
-                                        "is_delivery": {"type": "boolean"},
-                                        "delivery_address": {"type": "string"},
-                                        "delivery_notes": {"type": "string"},
+                                        "purchase_date": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "example": "2025-01-19T12:34:56"
+                                        },
+                                        "is_active": {"type": "boolean", "example": True},
+                                        "is_delivery": {"type": "boolean", "example": False},
+                                        "delivery_address": {"type": "string", "example": None},
+                                        "delivery_notes": {"type": "string", "example": None},
                                         "restaurant_details": {
                                             "type": "object",
                                             "properties": {
-                                                "id": {"type": "integer"},
-                                                "name": {"type": "string"},
-                                                "image_url": {"type": "string"}
+                                                "id": {"type": "integer", "example": 5},
+                                                "name": {"type": "string", "example": "Cupcake Heaven"},
+                                                "image_url": {"type": "string", "example": "https://example.com/image.jpg"}
                                             }
                                         }
                                     }
@@ -528,17 +551,20 @@ def reject_purchase(purchase_id):
     }
 })
 def get_user_active_orders():
-    """Get current user's active orders"""
     user_id = get_jwt_identity()
     response, status = get_user_active_orders_service(user_id)
     return jsonify(response), status
+
 
 @purchase_bp.route("/user/orders/previous", methods=["GET"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
     "summary": "Get user's previous orders",
-    "description": "Retrieve completed or rejected orders for the current user with pagination",
+    "description": (
+        "Retrieves all completed or rejected orders for the current user, with pagination. "
+        "Use `page` and `per_page` query parameters to navigate through results."
+    ),
     "security": [{"BearerAuth": []}],
     "parameters": [
         {
@@ -546,14 +572,16 @@ def get_user_active_orders():
             "in": "query",
             "schema": {"type": "integer", "default": 1},
             "required": False,
-            "description": "Page number for pagination"
+            "description": "Page number for pagination",
+            "example": 1
         },
         {
             "name": "per_page",
             "in": "query",
             "schema": {"type": "integer", "default": 10},
             "required": False,
-            "description": "Number of items per page"
+            "description": "Number of orders per page",
+            "example": 10
         }
     ],
     "responses": {
@@ -569,32 +597,39 @@ def get_user_active_orders():
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "id": {"type": "integer"},
-                                        "listing_title": {"type": "string"},
-                                        "quantity": {"type": "integer"},
-                                        "total_price": {"type": "string"},
-                                        "formatted_total_price": {"type": "string"},
+                                        "id": {"type": "integer", "example": 101},
+                                        "listing_title": {"type": "string", "example": "Box of cupcakes"},
+                                        "quantity": {"type": "integer", "example": 2},
+                                        "total_price": {"type": "string", "example": "25.99"},
                                         "status": {
                                             "type": "string",
-                                            "enum": ["COMPLETED", "REJECTED"]
+                                            "enum": ["COMPLETED", "REJECTED"],
+                                            "example": "COMPLETED"
                                         },
-                                        "purchase_date": {"type": "string", "format": "date-time"},
-                                        "is_delivery": {"type": "boolean"},
-                                        "delivery_address": {"type": "string"},
-                                        "delivery_notes": {"type": "string"},
-                                        "completion_image_url": {"type": "string"}
+                                        "purchase_date": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "example": "2025-01-19T12:34:56"
+                                        },
+                                        "is_delivery": {"type": "boolean", "example": False},
+                                        "delivery_address": {"type": "string", "example": None},
+                                        "delivery_notes": {"type": "string", "example": None},
+                                        "completion_image_url": {
+                                            "type": "string",
+                                            "example": "https://example.com/uploads/order-101.png"
+                                        }
                                     }
                                 }
                             },
                             "pagination": {
                                 "type": "object",
                                 "properties": {
-                                    "current_page": {"type": "integer"},
-                                    "total_pages": {"type": "integer"},
-                                    "per_page": {"type": "integer"},
-                                    "total_orders": {"type": "integer"},
-                                    "has_next": {"type": "boolean"},
-                                    "has_prev": {"type": "boolean"}
+                                    "current_page": {"type": "integer", "example": 1},
+                                    "total_pages": {"type": "integer", "example": 1},
+                                    "per_page": {"type": "integer", "example": 10},
+                                    "total_orders": {"type": "integer", "example": 8},
+                                    "has_next": {"type": "boolean", "example": False},
+                                    "has_prev": {"type": "boolean", "example": False}
                                 }
                             }
                         }
@@ -607,19 +642,23 @@ def get_user_active_orders():
     }
 })
 def get_user_previous_orders():
-    """Get current user's previous orders"""
     user_id = get_jwt_identity()
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
     response, status = get_user_previous_orders_service(user_id, page, per_page)
     return jsonify(response), status
 
+
 @purchase_bp.route("/user/orders/<int:purchase_id>", methods=["GET"])
 @jwt_required()
 @swag_from({
     "tags": ["Purchases"],
-    "summary": "Get order details",
-    "description": "Get detailed information about a specific order",
+    "summary": "Get detailed information about a specific order",
+    "description": (
+        "Retrieves all available details of a given purchase order by its ID, "
+        "including listing and restaurant details if any. "
+        "Only the user who made the order can access these details."
+    ),
     "security": [{"BearerAuth": []}],
     "parameters": [
         {
@@ -627,7 +666,8 @@ def get_user_previous_orders():
             "in": "path",
             "schema": {"type": "integer"},
             "required": True,
-            "description": "ID of the purchase order"
+            "description": "ID of the purchase order to retrieve",
+            "example": 101
         }
     ],
     "responses": {
@@ -641,33 +681,43 @@ def get_user_previous_orders():
                             "order": {
                                 "type": "object",
                                 "properties": {
-                                    "id": {"type": "integer"},
-                                    "listing_title": {"type": "string"},
-                                    "quantity": {"type": "integer"},
-                                    "total_price": {"type": "string"},
-                                    "formatted_total_price": {"type": "string"},
+                                    "id": {"type": "integer", "example": 101},
+                                    "listing_title": {"type": "string", "example": "Box of cupcakes"},
+                                    "quantity": {"type": "integer", "example": 2},
+                                    "total_price": {"type": "string", "example": "25.99"},
                                     "status": {
                                         "type": "string",
-                                        "enum": ["PENDING", "ACCEPTED", "REJECTED", "COMPLETED"]
+                                        "enum": ["PENDING", "ACCEPTED", "REJECTED", "COMPLETED"],
+                                        "example": "PENDING"
                                     },
-                                    "purchase_date": {"type": "string", "format": "date-time"},
-                                    "is_active": {"type": "boolean"},
-                                    "is_delivery": {"type": "boolean"},
-                                    "delivery_address": {"type": "string"},
-                                    "delivery_notes": {"type": "string"},
-                                    "completion_image_url": {"type": "string"},
+                                    "purchase_date": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-01-19T12:34:56"
+                                    },
+                                    "is_active": {"type": "boolean", "example": True},
+                                    "is_delivery": {"type": "boolean", "example": False},
+                                    "delivery_address": {"type": "string", "example": None},
+                                    "delivery_notes": {"type": "string", "example": None},
+                                    "completion_image_url": {
+                                        "type": "string",
+                                        "example": "https://example.com/uploads/order-101.png"
+                                    },
                                     "listing": {
                                         "type": "object",
                                         "properties": {
-                                            "id": {"type": "integer"},
-                                            "title": {"type": "string"}
+                                            "id": {"type": "integer", "example": 12},
+                                            "title": {"type": "string", "example": "Box of cupcakes"}
                                         }
                                     },
                                     "restaurant": {
                                         "type": "object",
                                         "properties": {
-                                            "id": {"type": "integer"},
-                                            "name": {"type": "string"}
+                                            "id": {"type": "integer", "example": 5},
+                                            "restaurantName": {
+                                                "type": "string",
+                                                "example": "Cupcake Heaven"
+                                            }
                                         }
                                     }
                                 }
@@ -678,12 +728,118 @@ def get_user_previous_orders():
             }
         },
         "401": {"description": "Unauthorized - Invalid or missing token"},
-        "404": {"description": "Order not found"},
+        "404": {"description": "Order not found or not accessible by the current user"},
         "500": {"description": "Internal server error"}
     }
 })
 def get_order_details(purchase_id):
-    """Get details of a specific order"""
     user_id = get_jwt_identity()
     response, status = get_order_details_service(user_id, purchase_id)
+    return jsonify(response), status
+
+
+@purchase_bp.route("/purchase/<int:purchase_id>/completion-image", methods=["POST"])
+@jwt_required()
+@swag_from({
+    "tags": ["Purchases"],
+    "summary": "Add a completion image to a purchase (file upload)",
+    "description": (
+            "Allows the restaurant (or user, depending on your business logic) to upload a completion image file "
+            "for a previously **ACCEPTED** purchase. This will mark the purchase as **COMPLETED**."
+    ),
+    "security": [{"BearerAuth": []}],
+    "parameters": [
+        {
+            "name": "purchase_id",
+            "in": "path",
+            "required": True,
+            "schema": {"type": "integer"},
+            "description": "ID of the purchase order",
+            "example": 101
+        }
+    ],
+    "requestBody": {
+        "required": True,
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "file": {
+                            "type": "string",
+                            "format": "binary",
+                            "description": "The image file to upload"
+                        }
+                    },
+                    "required": ["file"]
+                }
+            }
+        }
+    },
+    "responses": {
+        "200": {
+            "description": "Successfully added completion image and updated the purchase to COMPLETED",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "message": {"type": "string", "example": "Completion image added successfully"},
+                            "purchase": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer", "example": 101},
+                                    "completion_image_url": {
+                                        "type": "string",
+                                        "example": "https://example.com/uploads/order-101.png"
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": ["COMPLETED"],
+                                        "example": "COMPLETED"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "400": {
+            "description": "Purchase must be in ACCEPTED state (or other validation error)."
+        },
+        "403": {
+            "description": "Forbidden - Current user is not authorized (e.g., not the restaurant owner)."
+        },
+        "404": {
+            "description": "Purchase not found."
+        },
+        "500": {
+            "description": "Internal server error."
+        }
+    }
+})
+def add_completion_image(purchase_id):
+    """
+    Example of how to handle file uploads in Flask.
+    """
+    # Current user/owner ID
+    owner_id = get_jwt_identity()
+
+    # Retrieve file object from request (under the key 'file')
+    file_obj = request.files.get('file')
+
+    if not file_obj:
+        return jsonify({"message": "No file provided"}), 400
+
+    # Pass the file to your service layer or handle it directly here
+    # Suppose your service is updated to accept `file_obj` instead of `image_url`
+    from src.services.purchase_service import add_completion_image_service
+
+    response, status = add_completion_image_service(
+        purchase_id=purchase_id,
+        owner_id=owner_id,
+        file_obj=file_obj,
+        url_for_func=url_for  # <-- pass Flask's url_for here
+    )
     return jsonify(response), status
