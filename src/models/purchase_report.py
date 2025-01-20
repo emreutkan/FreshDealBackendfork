@@ -10,14 +10,14 @@ class PurchaseReport(db.Model):
     id = db.Column(Integer, primary_key=True, autoincrement=True)
 
     # The user who is reporting
-    user_id = db.Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = db.Column(Integer, ForeignKey('users.id'), nullable=False)
 
     # The purchase being reported
-    purchase_id = db.Column(Integer, ForeignKey('purchases.id', ondelete='CASCADE'), nullable=False)
+    purchase_id = db.Column(Integer, ForeignKey('purchases.id'), nullable=False)
 
     # Additional references for convenience (so we can quickly see the associated listing/restaurant)
-    restaurant_id = db.Column(Integer, ForeignKey('restaurants.id', ondelete='CASCADE'), nullable=True)
-    listing_id = db.Column(Integer, ForeignKey('listings.id', ondelete='CASCADE'), nullable=True)
+    restaurant_id = db.Column(Integer, ForeignKey('restaurants.id'), nullable=True)
+    listing_id = db.Column(Integer, ForeignKey('listings.id'), nullable=True)
 
     # A user-uploaded image URL (or file path) describing what went wrong
     image_url = db.Column(String(2083), nullable=True)

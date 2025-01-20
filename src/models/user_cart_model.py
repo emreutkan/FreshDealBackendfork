@@ -7,8 +7,8 @@ class UserCart(db.Model):
     __tablename__ = 'user_cart'
     id = db.Column(Integer, primary_key=True, autoincrement=True)
 
-    user_id = db.Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    listing_id = db.Column(Integer, ForeignKey('listings.id', ondelete='CASCADE'), nullable=False)
+    user_id = db.Column(Integer, ForeignKey('users.id'), nullable=False)
+    listing_id = db.Column(Integer, ForeignKey('listings.id'), nullable=False)
     restaurant_id = db.Column(
         Integer,
         ForeignKey('restaurants.id', ondelete='NO ACTION'),  # or simply omit the ondelete argument
