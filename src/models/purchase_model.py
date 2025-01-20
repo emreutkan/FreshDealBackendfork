@@ -34,8 +34,12 @@ class Purchase(db.Model):
     id = db.Column(Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     listing_id = db.Column(Integer, ForeignKey('listings.id', ondelete='CASCADE'), nullable=False)
-    restaurant_id = db.Column(Integer, ForeignKey('restaurants.id', ondelete='CASCADE'),
-                              nullable=False)
+    restaurant_id = db.Column(
+        Integer,
+        ForeignKey('restaurants.id'),  # <-- remove ondelete='CASCADE'
+        nullable=False
+    )
+
     quantity = db.Column(Integer, nullable=False, default=1)
 
     total_price = db.Column(DECIMAL(10, 2), nullable=False)
