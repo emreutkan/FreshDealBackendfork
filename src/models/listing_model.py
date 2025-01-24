@@ -2,6 +2,8 @@ from sqlalchemy.orm import relationship
 from . import db, Restaurant
 from sqlalchemy import Integer, String, ForeignKey, DECIMAL
 
+
+
 class Listing(db.Model):
     __tablename__ = 'listings'
     id = db.Column(Integer, primary_key=True, autoincrement=True)
@@ -83,3 +85,48 @@ class Listing(db.Model):
 
         db.session.add(self)
         return True
+
+    def reject_associated_purchases(self):
+        """
+        Rejects all active purchases associated with this listing before deletion
+        """
+        from .purchase_model import PurchaseStatus, Purchase
+        active_purchases = Purchase.query.filter(
+            db.and_(
+                Purchase.listing_id == self.id,
+                Purchase.status.in_(PurchaseStatus.active_statuses())
+            )
+        ).all()
+
+        for purchase in active_purchases:
+            try:
+                purchase.update_status(PurchaseStatus.REJECTED)
+                db.session.add(purchase)
+            except ValueError as e:
+                # Log the error but continue with other purchases
+                print(f"Error updating purchase {purchase.id}: {str(e)}")
+
+    @classmethod
+    def delete_listing(cls, listing_id):
+        """
+        Safely delete a listing by first rejecting all associated active purchases
+        """
+        print(f"Deleting listing: {listing_id}")
+        try:
+            listing = cls.query.get(listing_id)
+            if not listing:
+                print(f"Listing not found: {listing_id}")
+                return False, "Listing not found"
+
+            # First reject all associated active purchases
+            listing.reject_associated_purchases()
+
+            # Now delete the listing
+            db.session.delete(listing)
+            db.session.commit()
+            print(f"Listing deleted: {listing_id}")
+            return True, "Listing deleted successfully"
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error deleting listing: {str(e)}")
+            return False, f"Error deleting listing: {str(e)}"

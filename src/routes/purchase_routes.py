@@ -269,12 +269,6 @@ def restaurant_response(purchase_id):
     return jsonify(response), status
 
 
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from flasgger import swag_from
-
-purchase_bp = Blueprint("purchase", __name__)
-
 
 
 

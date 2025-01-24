@@ -275,48 +275,13 @@ def edit_listing_service(listing_id, owner_id, form_data, file_obj=None, url_for
         return {"success": False, "message": f"Error updating listing: {str(e)}"}, 500
 
 
-def delete_listing_service(listing_id, owner_id):
+# In your service layer:
+def delete_listing_service(listing_id):
     """
-    Deletes an existing listing.
-
-    Args:
-        listing_id: ID of the listing to delete
-        owner_id: ID of the user making the request
+    Service to safely delete a listing
     """
-    # Fetch the listing
-    listing = Listing.query.get(listing_id)
-    if not listing:
-        print("Listing not found")
-        return {"success": False, "message": f"Listing with ID {listing_id} not found"}, 404
-
-    # Verify ownership through restaurant
-    from src.models import Restaurant
-    restaurant = Restaurant.query.get(listing.restaurant_id)
-    if not restaurant or int(restaurant.owner_id) != int(owner_id):
-        print("You do not have permission to delete this listing")
-        return {"success": False, "message": "You do not have permission to delete this listing"}, 403
-
-    try:
-        # Delete the image file if it exists
-        if listing.image_url:
-            filename = os.path.basename(listing.image_url)
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            if os.path.exists(filepath):
-                os.remove(filepath)
-
-        # Decrement the restaurant's listings count
-        restaurant.listings = max(0, restaurant.listings - 1)
-
-        # Delete the listing record
-        db.session.delete(listing)
-        db.session.commit()
-
-        print("Listing deleted successfully")
-        return {
-            "success": True,
-            "message": "Listing deleted successfully"
-        }, 200
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error deleting listing: {str(e)}")
-        return {"success": False, "message": f"Error deleting listing: {str(e)}"}, 500
+    success, message = Listing.delete_listing(listing_id)
+    print(success, message)
+    if success:
+        return {"message": message}, 200
+    return {"message": message}, 400
