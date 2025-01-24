@@ -1,5 +1,7 @@
 # routes/restaurant_routes.py
 import os
+from datetime import datetime, UTC
+
 from flask import Blueprint, request, jsonify, url_for, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
@@ -219,17 +221,59 @@ def delete_restaurant(restaurant_id):
       403:
         description: Not the owner.
       404:
-        description: Restaurant not found.
+        description: Restaurant or owner not found.
       500:
         description: An error occurred.
     """
-    try:
-        owner_id = get_jwt_identity()
-        response, status = delete_restaurant_service(restaurant_id, owner_id)
-        return jsonify(response), status
-    except Exception as e:
-        return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
+    current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    current_user = get_jwt_identity()
 
+    print(f"[{current_time}] User {current_user} attempting to delete restaurant {restaurant_id}")
+
+    try:
+        # Verify user exists and is an owner
+        owner = User.query.get(current_user)
+        if not owner:
+            print(f"[{current_time}] User {current_user} not found")
+            return jsonify({
+                "success": False,
+                "message": "Owner not found",
+                "timestamp": current_time
+            }), 404
+
+        if owner.role != "owner":
+            print(f"[{current_time}] User {current_user} attempted to delete restaurant but is not an owner")
+            return jsonify({
+                "success": False,
+                "message": "Only owners can delete restaurants",
+                "timestamp": current_time
+            }), 403
+
+        # Call the service layer
+        response, status = delete_restaurant_service(restaurant_id, current_user)
+
+        # Log the result
+        if status == 200:
+            print(f"[{current_time}] User {current_user} successfully deleted restaurant {restaurant_id}")
+        else:
+            print(f"[{current_time}] User {current_user} failed to delete restaurant {restaurant_id}. Status: {status}")
+
+        # Add timestamp to response if not present
+        if isinstance(response, dict) and "timestamp" not in response:
+            response["timestamp"] = current_time
+
+        return jsonify(response), status
+
+    except Exception as e:
+        error_message = f"Error during restaurant deletion: {str(e)}"
+        print(f"[{current_time}] User {current_user}: {error_message}")
+
+        return jsonify({
+            "success": False,
+            "message": "An error occurred during restaurant deletion",
+            "error": str(e),
+            "timestamp": current_time
+        }), 500
 
 @restaurant_bp.route("/uploads/<filename>", methods=['GET'])
 def get_uploaded_file(filename):

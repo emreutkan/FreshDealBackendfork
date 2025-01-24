@@ -203,32 +203,6 @@ def get_restaurant_service(restaurant_id):
     return restaurant_data, 200
 
 
-def delete_restaurant_service(restaurant_id, owner_id):
-    """
-    Delete a restaurant by its ID if it is owned by the specified owner.
-    """
-    restaurant = Restaurant.query.get(restaurant_id)
-    if not restaurant:
-        return {"success": False, "message": f"Restaurant with ID {restaurant_id} not found."}, 404
-
-    if str(owner_id) != str(restaurant.owner_id):
-        return {"success": False, "message": "You are not the owner of this restaurant."}, 403
-
-    # Optionally attempt to delete the image file.
-    if restaurant.image_url:
-        try:
-            filename = restaurant.image_url.split('/')[-1]
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            if os.path.exists(filepath):
-                os.remove(filepath)
-        except Exception as e:
-            # Log the file deletion error if required.
-            print(f"Failed to delete image file: {e}")
-
-    db.session.delete(restaurant)
-    db.session.commit()
-    return {"success": True, "message": f"Restaurant with ID {restaurant_id} successfully deleted."}, 200
-
 
 def get_restaurants_proximity_service(user_lat, user_lon, radius=10):
     """
@@ -453,3 +427,10 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
         "message": "Restaurant updated successfully!",
         "restaurant": restaurant_to_dict(restaurant)
     }, 200
+
+def delete_restaurant_service(restaurant_id, owner_id):
+    """
+    Delete a restaurant by its ID if it is owned by the specified owner.
+    Delegates to the Restaurant model's class method.
+    """
+    return Restaurant.delete_restaurant_service(restaurant_id, owner_id)

@@ -1,6 +1,11 @@
+import os
+
 from . import db
 from sqlalchemy import Integer, String, DECIMAL, Boolean, Float
 from sqlalchemy.orm import validates, relationship
+
+from datetime import datetime, UTC
+
 
 
 class Restaurant(db.Model):
@@ -11,6 +16,8 @@ class Restaurant(db.Model):
 
     restaurantName = db.Column(String(80), nullable=False)
     restaurantDescription = db.Column(String(500), nullable=True)
+    restaurantEmail = db.Column(String(80), nullable=True)
+    restaurantPhone = db.Column(String(20), nullable=True)
     longitude = db.Column(DECIMAL(9, 6), nullable=False)
     latitude = db.Column(DECIMAL(9, 6), nullable=False)
     category = db.Column(String(80), nullable=False)
@@ -85,3 +92,99 @@ class Restaurant(db.Model):
         else:
             self.listings = max(0, self.listings - 1)
         db.session.add(self)
+
+    def try_delete_image_file(self, image_url):
+        """
+        Attempt to delete image file without raising exceptions.
+        Returns (success, message) tuple.
+        """
+        from ..routes.restaurant_routes import UPLOAD_FOLDER
+
+        if not image_url:
+            return True, "No image to delete"
+
+        try:
+            filename = image_url.split('/')[-1]
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+                return True, f"Successfully deleted image: {filename}"
+            return True, f"Image file not found: {filename}"
+        except Exception as e:
+            return False, f"Failed to delete image file: {str(e)}"
+
+    @classmethod
+    def delete_restaurant_service(cls, restaurant_id, owner_id):
+        """
+        Delete a restaurant by its ID if it is owned by the specified owner.
+        """
+        from .listing_model import Listing  # Import here to avoid circular imports
+
+        restaurant = cls.query.get(restaurant_id)
+        if not restaurant:
+            return {"success": False, "message": f"Restaurant with ID {restaurant_id} not found."}, 404
+
+        if str(owner_id) != str(restaurant.owner_id):
+            return {"success": False, "message": "You are not the owner of this restaurant."}, 403
+
+        deletion_log = []
+        image_url = restaurant.image_url  # Store for later use
+
+        try:
+            # Get all listings before deleting them
+            listings = Listing.query.filter_by(restaurant_id=restaurant_id).all()
+
+            # Handle each listing individually
+            for listing in listings:
+                print(f"[{datetime.now(UTC)}] Attempting to delete listing {listing.id}")
+                success, message = Listing.delete_listing(listing.id)
+                deletion_log.append({
+                    "listing_id": listing.id,
+                    "success": success,
+                    "message": message,
+                    "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+                })
+
+                if not success:
+                    print(f"[{datetime.now(UTC)}] Warning: Issue with listing {listing.id}: {message}")
+
+            # Delete the restaurant from database
+            db.session.delete(restaurant)
+            db.session.commit()
+
+            # After successful database operations, try to delete the image file
+            image_delete_success, image_delete_message = restaurant.try_delete_image_file(image_url)
+
+            response = {
+                "success": True,
+                "message": f"Restaurant with ID {restaurant_id} deleted successfully",
+                "details": {
+                    "restaurant_id": restaurant_id,
+                    "listings_processed": len(listings),
+                    "deletion_log": deletion_log,
+                    "image_deletion": {
+                        "success": image_delete_success,
+                        "message": image_delete_message
+                    },
+                    "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+                }
+            }
+
+            print(f"[{datetime.now(UTC)}] Successfully deleted restaurant {restaurant_id} "
+                  f"and {len(listings)} listings")
+
+            return response, 200
+
+        except Exception as e:
+            db.session.rollback()
+            error_message = f"Error during restaurant deletion: {str(e)}"
+            print(f"[{datetime.now(UTC)}] {error_message}")
+            return {
+                "success": False,
+                "message": error_message,
+                "details": {
+                    "restaurant_id": restaurant_id,
+                    "error": str(e),
+                    "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+                }
+            }, 500
