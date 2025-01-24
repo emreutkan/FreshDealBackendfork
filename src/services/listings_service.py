@@ -192,3 +192,131 @@ def search_service(search_type, query_text, restaurant_id):
 
     else:
         return {"success": False, "message": "Invalid search type. Use 'restaurant' or 'listing'"}, 400
+
+
+def edit_listing_service(listing_id, owner_id, form_data, file_obj=None, url_for_func=None):
+    """
+    Edits an existing listing.
+
+    Args:
+        listing_id: ID of the listing to edit
+        owner_id: ID of the user making the request
+        form_data: Dictionary containing the updated listing data
+        file_obj: Optional new image file
+        url_for_func: Function to generate URLs for file paths
+    """
+    # Fetch the existing listing
+    listing = Listing.query.get(listing_id)
+    if not listing:
+        return {"success": False, "message": f"Listing with ID {listing_id} not found"}, 404
+
+    # log the formdata recieved
+    print(form_data)
+    # Verify ownership through restaurant
+    from src.models import Restaurant
+    restaurant = Restaurant.query.get(listing.restaurant_id)
+    if not restaurant or int(restaurant.owner_id) != int(owner_id):
+        return {"success": False, "message": "You do not have permission to edit this listing"}, 403
+
+    # Update the fields that are provided
+    if "title" in form_data:
+        listing.title = form_data["title"]
+    if "description" in form_data:
+        listing.description = form_data.get("description", "")
+    if "original_price" in form_data:
+        listing.original_price = float(form_data["original_price"])
+    if "pick_up_price" in form_data:
+        listing.pick_up_price = float(form_data["pick_up_price"]) if form_data["pick_up_price"] else None
+    if "delivery_price" in form_data:
+        listing.delivery_price = float(form_data["delivery_price"]) if form_data["delivery_price"] else None
+    if "count" in form_data:
+        try:
+            count = int(form_data["count"])
+            if count <= 0:
+                return {"success": False, "message": "Count must be a positive integer"}, 400
+            listing.count = count
+        except ValueError:
+            return {"success": False, "message": "Count must be an integer"}, 400
+    if "consume_within" in form_data:
+        try:
+            consume_within = int(form_data["consume_within"])
+            if consume_within <= 0:
+                return {"success": False, "message": "Consume within must be a positive integer"}, 400
+            listing.consume_within = consume_within
+        except ValueError:
+            return {"success": False, "message": "Consume within must be an integer"}, 400
+
+    # Handle new image upload if provided
+    if file_obj and allowed_file(file_obj.filename):
+        # Delete old image file if it exists
+        if listing.image_url:
+            old_filename = os.path.basename(listing.image_url)
+            old_filepath = os.path.join(UPLOAD_FOLDER, old_filename)
+            if os.path.exists(old_filepath):
+                os.remove(old_filepath)
+
+        # Save new image
+        original_filename = secure_filename(file_obj.filename)
+        unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
+        filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
+        file_obj.save(filepath)
+        listing.image_url = url_for_func('api_v1.listings.get_uploaded_file',
+                                         filename=unique_filename, _external=True)
+
+    try:
+        db.session.commit()
+        return {
+            "success": True,
+            "message": "Listing updated successfully",
+            "listing": listing.to_dict()
+        }, 200
+    except Exception as e:
+        db.session.rollback()
+        return {"success": False, "message": f"Error updating listing: {str(e)}"}, 500
+
+
+def delete_listing_service(listing_id, owner_id):
+    """
+    Deletes an existing listing.
+
+    Args:
+        listing_id: ID of the listing to delete
+        owner_id: ID of the user making the request
+    """
+    # Fetch the listing
+    listing = Listing.query.get(listing_id)
+    if not listing:
+        print("Listing not found")
+        return {"success": False, "message": f"Listing with ID {listing_id} not found"}, 404
+
+    # Verify ownership through restaurant
+    from src.models import Restaurant
+    restaurant = Restaurant.query.get(listing.restaurant_id)
+    if not restaurant or int(restaurant.owner_id) != int(owner_id):
+        print("You do not have permission to delete this listing")
+        return {"success": False, "message": "You do not have permission to delete this listing"}, 403
+
+    try:
+        # Delete the image file if it exists
+        if listing.image_url:
+            filename = os.path.basename(listing.image_url)
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+        # Decrement the restaurant's listings count
+        restaurant.listings = max(0, restaurant.listings - 1)
+
+        # Delete the listing record
+        db.session.delete(listing)
+        db.session.commit()
+
+        print("Listing deleted successfully")
+        return {
+            "success": True,
+            "message": "Listing deleted successfully"
+        }, 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting listing: {str(e)}")
+        return {"success": False, "message": f"Error deleting listing: {str(e)}"}, 500

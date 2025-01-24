@@ -378,3 +378,204 @@ def search():
             "message": "An error occurred while performing search",
             "error": str(e)
         }), 500
+
+@listings_bp.route("/listings/<int:listing_id>", methods=["PUT"])
+@jwt_required()
+def edit_listing(listing_id):
+    """
+    Edit an existing listing
+    ---
+    tags:
+      - Listings
+    summary: Edit an existing food listing
+    description: |
+      Updates an existing food listing's details.
+      Only the owner of the restaurant can edit their listings.
+      Current time (UTC): 2025-01-23 21:31:45
+    parameters:
+      - in: path
+        name: listing_id
+        type: integer
+        required: true
+        description: ID of the listing to edit
+      - in: formData
+        name: title
+        type: string
+        required: false
+        description: New title of the listing
+        example: "Updated Pizza Margherita"
+      - in: formData
+        name: description
+        type: string
+        required: false
+        description: New description of the listing
+        example: "Updated Italian pizza with fresh basil"
+      - in: formData
+        name: original_price
+        type: number
+        required: false
+        description: New original price of the item
+        example: 16.99
+      - in: formData
+        name: pick_up_price
+        type: number
+        required: false
+        description: New price for pick-up orders
+        example: 13.99
+      - in: formData
+        name: delivery_price
+        type: number
+        required: false
+        description: New price for delivery orders
+        example: 18.99
+      - in: formData
+        name: count
+        type: integer
+        required: false
+        description: New number of items available
+        example: 6
+      - in: formData
+        name: consume_within
+        type: integer
+        required: false
+        description: New number of days within which the item should be consumed
+        example: 3
+      - in: formData
+        name: image
+        type: file
+        required: false
+        description: New image file for the listing
+    responses:
+      200:
+        description: Listing updated successfully
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            message:
+              type: string
+              example: "Listing updated successfully"
+            listing:
+              $ref: '#/definitions/Listing'
+      403:
+        description: Not authorized
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+              example: "You do not have permission to edit this listing"
+      404:
+        description: Listing not found
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+              example: "Listing not found"
+    """
+    try:
+        owner_id = get_jwt_identity()
+        owner = User.query.get(owner_id)
+        if not owner:
+            return jsonify({"success": False, "message": "Owner not found"}), 404
+
+        form_data = request.form.to_dict()
+        file_obj = request.files.get("image")
+
+        from src.services.listings_service import edit_listing_service
+        response, status = edit_listing_service(
+            listing_id=listing_id,
+            owner_id=owner_id,
+            form_data=form_data,
+            file_obj=file_obj,
+            url_for_func=url_for
+        )
+        return jsonify(response), status
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "An error occurred while updating the listing",
+            "error": str(e)
+        }), 500
+
+@listings_bp.route("/listings/<int:listing_id>", methods=["DELETE"])
+@jwt_required()
+def delete_listing(listing_id):
+    """
+    Delete a listing
+    ---
+    tags:
+      - Listings
+    summary: Delete an existing food listing
+    description: |
+      Removes a food listing from the system.
+      Only the owner of the restaurant can delete their listings.
+      Current time (UTC): 2025-01-23 21:31:45
+    parameters:
+      - in: path
+        name: listing_id
+        type: integer
+        required: true
+        description: ID of the listing to delete
+    responses:
+      200:
+        description: Listing deleted successfully
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            message:
+              type: string
+              example: "Listing deleted successfully"
+      403:
+        description: Not authorized
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+              example: "You do not have permission to delete this listing"
+      404:
+        description: Listing not found
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+              example: "Listing not found"
+    """
+    try:
+        owner_id = get_jwt_identity()
+        owner = User.query.get(owner_id)
+        if not owner:
+            return jsonify({"success": False, "message": "Owner not found"}), 404
+
+        from src.services.listings_service import delete_listing_service
+        response, status = delete_listing_service(
+            listing_id=listing_id,
+            owner_id=owner_id
+        )
+        return jsonify(response), status
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "An error occurred while deleting the listing",
+            "error": str(e)
+        }), 500

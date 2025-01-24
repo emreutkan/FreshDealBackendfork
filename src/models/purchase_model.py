@@ -32,12 +32,12 @@ class Purchase(db.Model):
 
     # Columns
     id = db.Column(Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(Integer, ForeignKey('users.id'), nullable=False)
-    listing_id = db.Column(Integer, ForeignKey('listings.id'), nullable=False)
+    user_id = db.Column(Integer, ForeignKey('users.id'), nullable=True)
+    listing_id = db.Column(Integer, ForeignKey('listings.id'), nullable=True)
     restaurant_id = db.Column(
         Integer,
         ForeignKey('restaurants.id'),  # <-- remove ondelete='CASCADE'
-        nullable=False
+        nullable=True
     )
 
     quantity = db.Column(Integer, nullable=False, default=1)
