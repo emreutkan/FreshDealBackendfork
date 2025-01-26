@@ -35,7 +35,9 @@ def restaurant_to_dict(restaurant):
         "delivery": restaurant.delivery,
         "maxDeliveryDistance": restaurant.maxDeliveryDistance,
         "deliveryFee": float(restaurant.deliveryFee) if restaurant.deliveryFee else None,
-        "minOrderAmount": float(restaurant.minOrderAmount) if restaurant.minOrderAmount else None
+        "minOrderAmount": float(restaurant.minOrderAmount) if restaurant.minOrderAmount else None,
+        "restaurantEmail": restaurant.restaurantEmail if restaurant.restaurantEmail else None,
+        "restaurantPhone": restaurant.restaurantPhone if restaurant.restaurantPhone else None,
     }
 
 def create_restaurant_service(owner_id, form, files, url_for_func):
@@ -64,6 +66,8 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
     delivery_fee = form.get('deliveryFee')
     min_order_amount = form.get('minOrderAmount')
     max_delivery_distance = form.get('maxDeliveryDistance')
+    restaurant_email = form.get('restaurantEmail')
+    restaurant_phone = form.get('restaurantPhone')
 
     # Validate required fields.
     if not restaurant_name:
@@ -80,6 +84,7 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
         max_delivery_distance = float(max_delivery_distance) if max_delivery_distance else None
         delivery_fee = float(delivery_fee) if delivery_fee else None
         min_order_amount = float(min_order_amount) if min_order_amount else None
+
     except ValueError:
         return {"success": False, "message": "Invalid format for numeric fields"}, 400
 
@@ -115,7 +120,9 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
         delivery=delivery,
         maxDeliveryDistance=max_delivery_distance,
         deliveryFee=delivery_fee,
-        minOrderAmount=min_order_amount
+        minOrderAmount=min_order_amount,
+        restaurantEmail=restaurant_email,
+        restaurantPhone=restaurant_phone
     )
 
     db.session.add(new_restaurant)
@@ -156,7 +163,9 @@ def get_restaurants_service(owner_id):
             "delivery": restaurant.delivery,
             "maxDeliveryDistance": restaurant.maxDeliveryDistance,
             "deliveryFee": float(restaurant.deliveryFee) if restaurant.deliveryFee else None,
-            "minOrderAmount": float(restaurant.minOrderAmount) if restaurant.minOrderAmount else None
+            "minOrderAmount": float(restaurant.minOrderAmount) if restaurant.minOrderAmount else None,
+            "restaurantEmail": restaurant.restaurantEmail if restaurant.restaurantEmail else None,
+            "restaurantPhone": restaurant.restaurantPhone if restaurant.restaurantPhone else None,
         })
     return serialized, 200
 
@@ -189,6 +198,8 @@ def get_restaurant_service(restaurant_id):
         "maxDeliveryDistance": restaurant.maxDeliveryDistance,
         "deliveryFee": float(restaurant.deliveryFee) if restaurant.deliveryFee else None,
         "minOrderAmount": float(restaurant.minOrderAmount) if restaurant.minOrderAmount else None,
+        "restaurantEmail": restaurant.restaurantEmail if restaurant.restaurantEmail else None,
+        "restaurantPhone": restaurant.restaurantPhone if restaurant.restaurantPhone else None,
         "comments": [
             {
                 "id": comment.id,
@@ -250,7 +261,10 @@ def get_restaurants_proximity_service(user_lat, user_lon, radius=10):
                 "maxDeliveryDistance": restaurant.maxDeliveryDistance,
                 "deliveryFee": float(restaurant.deliveryFee) if restaurant.deliveryFee else None,
                 "minOrderAmount": float(restaurant.minOrderAmount) if restaurant.minOrderAmount else None,
+                "restaurantEmail": restaurant.restaurantEmail if restaurant.restaurantEmail else None,
+                "restaurantPhone": restaurant.restaurantPhone if restaurant.restaurantPhone else None,
                 "distance_km": round(dist, 2)
+
             })
 
     if not nearby:
@@ -346,6 +360,8 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
     delivery_fee = form.get('deliveryFee', restaurant.deliveryFee)
     min_order_amount = form.get('minOrderAmount', restaurant.minOrderAmount)
     max_delivery_distance = form.get('maxDeliveryDistance', restaurant.maxDeliveryDistance)
+    restaurant_email = form.get('restaurantEmail', restaurant.restaurantEmail)
+    restaurant_phone = form.get('restaurantPhone', restaurant.restaurantPhone)
 
     # Convert booleans
     if pickup is not None:
@@ -419,6 +435,11 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
     restaurant.maxDeliveryDistance = max_delivery_distance
     restaurant.deliveryFee = delivery_fee
     restaurant.minOrderAmount = min_order_amount
+    if restaurant_email:
+        restaurant.restaurantEmail = restaurant_email
+    if restaurant_phone:
+        restaurant.restaurantPhone = restaurant_phone
+
 
     # Commit changes
     db.session.commit()
