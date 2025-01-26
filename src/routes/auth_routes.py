@@ -2,9 +2,8 @@
 
 import logging
 import coloredlogs
-from flask import Blueprint, request, jsonify
-from src.services.auth_service import login_user, register_user, verify_email_code
-
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for
+from src.services.auth_service import login_user, register_user, verify_email_code, initiate_password_reset, reset_password
 auth_bp = Blueprint("auth", __name__)
 
 logger = logging.getLogger(__name__)
@@ -281,4 +280,144 @@ def verify_email():
     data = request.get_json()
     client_ip = get_client_ip()
     response, status = verify_email_code(data, client_ip)
+    return jsonify(response), status
+
+
+
+
+
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    """
+    Initiate Password Reset
+    ---
+    tags:
+      - Authentication
+    summary: Send password reset email
+    description: |
+      Initiates the password reset process by sending a reset link via email.
+      The user will receive an email with a link to reset their password.
+
+      Note: Current time (UTC): 2025-01-26 06:08:16
+      Current User: emreutkan
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+            properties:
+              email:
+                type: string
+                example: "user@example.com"
+                description: Email address of the account to reset
+    responses:
+      200:
+        description: Reset instructions sent (if email exists)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Password reset instructions have been sent to your email."
+    """
+    data = request.get_json()
+    response, status = initiate_password_reset(data)
+    return jsonify(response), status
+
+# routes/auth_routes.py
+
+@auth_bp.route("/reset-password/<token>", methods=["GET"])
+def reset_password_form(token):
+    """
+    Display Reset Password Form
+    ---
+    tags:
+      - Authentication
+    summary: Display password reset form
+    description: |
+      Displays the web form for users to enter their new password.
+      This endpoint is accessed via the link sent in the reset password email.
+
+      Current Date and Time (UTC): 2025-01-26 06:11:09
+      Current User: emreutkan
+    parameters:
+      - in: path
+        name: token
+        required: true
+        schema:
+          type: string
+        description: Reset token from email
+    responses:
+      200:
+        description: Reset password form displayed
+      400:
+        description: Invalid or expired token
+    """
+    return render_template('auth/reset_password.html', token=token)
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password_route():
+    """
+    Reset Password
+    ---
+    tags:
+      - Authentication
+    summary: Process password reset
+    description: |
+      Handles password reset form submission.
+      On success, displays a success animation.
+
+      Current Date and Time (UTC): 2025-01-26 06:11:09
+      Current User: emreutkan
+    requestBody:
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            required:
+              - token
+              - new_password
+            properties:
+              token:
+                type: string
+                description: Reset token from email
+              new_password:
+                type: string
+                format: password
+                description: New password to set
+        application/json:
+          schema:
+            type: object
+            required:
+              - token
+              - new_password
+            properties:
+              token:
+                type: string
+                description: Reset token from email
+              new_password:
+                type: string
+                format: password
+                description: New password to set
+    responses:
+      200:
+        description: Password successfully reset
+      400:
+        description: Invalid token or password
+    """
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form.to_dict()
+
+    response, status = reset_password(data)
     return jsonify(response), status

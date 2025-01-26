@@ -1,5 +1,9 @@
 # services/auth_service.py
 import logging
+from datetime import datetime, timedelta, UTC
+from secrets import token_urlsafe
+
+from flask import url_for, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 from email_validator import validate_email, EmailNotValidError
 import phonenumbers
@@ -263,3 +267,159 @@ def verify_email_code(data, client_ip):
         logger.info(f"Invalid verification code for email: {email}")
         return ({"success": False, "message": "Invalid or expired verification code.",
                  "details": {"error_code": "INVALID_CODE"}}, 400)
+
+def initiate_password_reset(data):
+    """
+    Initiate the password reset process by sending a reset link to user's email.
+
+    Expected data keys:
+    - email
+
+    Returns tuple (response dict, status code)
+    """
+    email = data.get("email")
+    logger.info(f"Password reset initiated for email: {email}")
+
+    if not email:
+        logger.info("Missing email for password reset")
+        return {
+            "success": False,
+            "message": "Email is required",
+            "details": {"error_code": "MISSING_EMAIL"}
+        }, 400
+
+    try:
+        validate_email(email)
+    except EmailNotValidError as e:
+        logger.info(f"Invalid email format: {email} - {str(e)}")
+        return {
+            "success": False,
+            "message": "Invalid email format",
+            "details": {"error_code": "INVALID_EMAIL"}
+        }, 400
+
+    user = get_user_by_email(email)
+    if not user:
+        # For security reasons, still return success even if email doesn't exist
+        logger.info(f"Password reset attempted for non-existent email: {email}")
+        return {
+            "success": True,
+            "message": "If the email exists, a password reset link will be sent.",
+        }, 200
+
+    # Generate a secure token
+    reset_token = token_urlsafe(32)
+    # Use timezone-aware datetime
+    expiration = datetime.now(UTC) + timedelta(hours=1)
+
+    try:
+        # Store the reset token in the user record
+        user.reset_token = reset_token
+        user.reset_token_expires = expiration
+        db.session.commit()
+
+        # Create the reset link for the web interface
+        reset_base_url = current_app.config.get('BASE_URL', 'https://freshdealapi-fkfaajfaffh4c0ex.uksouth-01.azurewebsites.net')
+        reset_link = f"{reset_base_url}/v1/reset-password/{reset_token}"
+
+        # Send a user-friendly email
+        subject = "Password Reset Request"
+        message = f"""
+        Hello,
+
+        You have requested to reset your password. Please click the link below to set a new password:
+
+        {reset_link}
+
+        This link will expire in 1 hour.
+
+        If you did not request this password reset, please ignore this email.
+
+        Best regards,
+        Your Application Team
+        """
+
+        send_email(email, subject, message)
+
+        logger.info(f"Password reset token sent to: {email}")
+        return {
+            "success": True,
+            "message": "Password reset instructions have been sent to your email.",
+        }, 200
+
+    except Exception as e:
+        logger.error(f"Error during password reset initiation: {str(e)}")
+        db.session.rollback()
+        return {
+            "success": False,
+            "message": "An error occurred while processing your request.",
+            "details": {"error_code": "SERVER_ERROR"}
+        }, 500
+
+def reset_password(data):
+    """
+    Complete the password reset process using the reset token.
+
+    Expected data keys:
+    - token: the reset token from the email
+    - new_password: the new password to set
+
+    Returns tuple (response dict, status code)
+    """
+    token = data.get("token")
+    new_password = data.get("new_password")
+
+    logger.info("Password reset attempt with token")
+
+    if not token or not new_password:
+        logger.info("Missing token or new password")
+        return {
+            "success": False,
+            "message": "Token and new password are required",
+            "details": {"error_code": "MISSING_REQUIRED_FIELDS"}
+        }, 400
+
+    # Find user with this token
+    user = User.query.filter_by(reset_token=token).first()
+
+    if not user:
+        logger.info("Invalid or expired reset token")
+        return {
+            "success": False,
+            "message": "Invalid or expired reset token",
+            "details": {"error_code": "INVALID_TOKEN"}
+        }, 400
+
+    # Check if token has expired - Make sure both times are timezone-aware
+    current_time = datetime.now(UTC)
+    if not user.reset_token_expires or user.reset_token_expires.replace(tzinfo=UTC) < current_time:
+        logger.info(f"Expired reset token for user_id: {user.id}")
+        return {
+            "success": False,
+            "message": "Reset token has expired",
+            "details": {"error_code": "EXPIRED_TOKEN"}
+        }, 400
+
+    try:
+        # Update password
+        user.password = generate_password_hash(new_password)
+        # Clear the reset token
+        user.reset_token = None
+        user.reset_token_expires = None
+
+        db.session.commit()
+
+        logger.info(f"Password reset successful for user_id: {user.id}")
+        return {
+            "success": True,
+            "message": "Password has been reset successfully.",
+        }, 200
+
+    except Exception as e:
+        logger.error(f"Error during password reset: {str(e)}")
+        db.session.rollback()
+        return {
+            "success": False,
+            "message": "An error occurred while resetting the password.",
+            "details": {"error_code": "SERVER_ERROR"}
+        }, 500

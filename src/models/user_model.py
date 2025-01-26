@@ -17,3 +17,5 @@ class User(db.Model):
     )
     purchases = relationship('Purchase', back_populates='user')  # Use correct class name
     comments = relationship('RestaurantComment', back_populates='user')  # Add this line
+    reset_token = db.Column(db.String(100), unique=True, nullable=True)
+    reset_token_expires = db.Column(db.DateTime, nullable=True)
