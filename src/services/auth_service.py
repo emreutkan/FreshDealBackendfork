@@ -134,13 +134,10 @@ def login_user(data, client_ip):
     logger.info("Failed to process login step.")
     return {"success": False, "message": "Failed to process login."}, 400
 
-
 def register_user(data):
     """
     Process user registration.
-
     Expected keys: name_surname, email, phone_number, password, role.
-
     Returns a tuple (response dict, status code)
     """
     name_surname = data.get("name_surname")
@@ -151,6 +148,7 @@ def register_user(data):
 
     logger.info(f"Registration attempt for email: {email}, phone_number: {phone_number}, role: {role}")
 
+    # Input validation
     if role not in ["customer", "owner"]:
         logger.info(f"Invalid role: {role}")
         return {"success": False, "message": "Invalid role"}, 400
@@ -200,22 +198,42 @@ def register_user(data):
     new_user.password = generate_password_hash(password)
 
     try:
+        # First save the user to the database
         db.session.add(new_user)
         db.session.commit()
         logger.info(f"User registered successfully: {email or phone_number}")
-        # Optionally send a verification email:
+
+        # Attempt to send verification email if email is provided
+        # but don't let email sending failures affect registration
         if email:
-            code = auth_code_generator.set_verification_code()
-            auth_code_generator.store_verification_code(identifier=email, code=code)
-            subject = "Your Verification Code"
-            message = f"Your verification code is: {code}. This code will expire in 10 minutes."
-            send_email(email, subject, message)
-        return {"success": True, "message": "User registered successfully!"}, 201
+            try:
+                code = auth_code_generator.set_verification_code()
+                auth_code_generator.store_verification_code(identifier=email, code=code)
+                subject = "Your Verification Code"
+                message = f"Your verification code is: {code}. This code will expire in 10 minutes."
+                send_email(email, subject, message)
+                logger.info(f"Verification email sent successfully to {email}")
+            except Exception as email_error:
+                # Log the email sending error but continue with registration
+                logger.error(f"Failed to send verification email to {email}: {str(email_error)}")
+                # Return success but indicate email sending failed
+                return {
+                    "success": True,
+                    "message": "User registered successfully! Verification email could not be sent.",
+                    "email_sent": False
+                }, 201
+
+        # Return success if everything went well
+        return {
+            "success": True,
+            "message": "User registered successfully!",
+            "email_sent": True if email else None
+        }, 201
+
     except Exception as e:
-        logger.info(f"Error during registration: {str(e)}")
+        logger.error(f"Error during registration: {str(e)}")
         db.session.rollback()
         return {"success": False, "message": "An error occurred during registration."}, 500
-
 
 def verify_email_code(data, client_ip):
     """
