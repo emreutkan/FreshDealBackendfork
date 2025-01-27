@@ -1,6 +1,6 @@
 import logging
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import List, Dict, Any, Tuple
 from src.models import db, UserDevice, User
 
@@ -43,7 +43,7 @@ class NotificationService:
         try:
             # Clean the token before storing
             cleaned_token = NotificationService.clean_token(token)
-            current_time = datetime.utcnow()
+            current_time = datetime.now(UTC)
 
             # Check if token already exists for this user
             device = UserDevice.query.filter_by(
@@ -208,7 +208,7 @@ class NotificationService:
 
             if device:
                 device.is_active = False
-                device.last_used = datetime.utcnow()
+                device.last_used = datetime.now(UTC)  # Instead of datetime.utcnow()
                 db.session.commit()
                 logger.info(f"Successfully deactivated token for device {device.id}")
                 return True
@@ -233,7 +233,7 @@ class NotificationService:
             int: Number of tokens cleaned
         """
         try:
-            threshold_date = datetime.utcnow() - timedelta(days=days_threshold)
+            threshold_date = datetime.now(UTC) - timedelta(days=days_threshold)  # Instead of datetime.utcnow()
 
             # Find inactive tokens
             inactive_devices = UserDevice.query.filter(

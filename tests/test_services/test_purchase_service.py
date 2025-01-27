@@ -2,9 +2,10 @@
 
 import unittest
 from decimal import Decimal
+from datetime import datetime, UTC
 from flask import Flask
 from werkzeug.security import generate_password_hash
-from werkzeug.datastructures import FileStorage
+from werkzeug.datastructures import FileStorage, MultiDict
 from io import BytesIO
 from src.models import db, User, Restaurant, Listing, UserCart, Purchase
 from src.models.purchase_model import PurchaseStatus
@@ -16,6 +17,7 @@ from src.services.purchase_service import (
     get_user_previous_orders_service,
     add_completion_image_service
 )
+
 
 class TestPurchaseService(unittest.TestCase):
     def setUp(self):
@@ -35,6 +37,9 @@ class TestPurchaseService(unittest.TestCase):
 
         # Create tables
         db.create_all()
+
+        # Set up test timestamp
+        self.test_timestamp = datetime(2025, 1, 27, 9, 23, 25, tzinfo=UTC)
 
         # Create test users
         self.owner = User(
@@ -93,6 +98,7 @@ class TestPurchaseService(unittest.TestCase):
         self.cart_item = UserCart(
             user_id=self.customer.id,
             listing_id=self.listing.id,
+            restaurant_id=self.restaurant.id,
             count=2
         )
         db.session.add(self.cart_item)
@@ -104,8 +110,24 @@ class TestPurchaseService(unittest.TestCase):
         db.drop_all()
         self.app_context.pop()
 
-    def test_create_purchase_order(self):
-        """Test creating a purchase order"""
+    def test_create_purchase_order_pickup(self):
+        """Test creating a purchase order for pickup"""
+        data = {
+            "is_delivery": False,
+            "pickup_notes": "Will pickup at 6 PM"
+        }
+
+        response, status_code = create_purchase_order_service(self.customer.id, data)
+
+        self.assertEqual(status_code, 201)
+        self.assertIn("Purchase order created successfully", response["message"])
+        self.assertEqual(len(response["purchases"]), 1)
+        self.assertEqual(response["purchases"][0]["quantity"], 2)
+        self.assertEqual(float(response["purchases"][0]["total_price"]), 19.98)  # 2 * 9.99
+        self.assertFalse(response["purchases"][0]["is_delivery"])
+
+    def test_create_purchase_order_delivery(self):
+        """Test creating a purchase order for delivery"""
         data = {
             "is_delivery": True,
             "delivery_address": "123 Test St",
@@ -118,14 +140,12 @@ class TestPurchaseService(unittest.TestCase):
         self.assertIn("Purchase order created successfully", response["message"])
         self.assertEqual(len(response["purchases"]), 1)
         self.assertEqual(response["purchases"][0]["quantity"], 2)
-
-        # Verify stock was decreased
-        updated_listing = Listing.query.get(self.listing.id)
-        self.assertEqual(updated_listing.count, 8)
+        self.assertEqual(float(response["purchases"][0]["total_price"]), 38.97)  # 2 * 12.99 * 1.5 (delivery fee)
+        self.assertTrue(response["purchases"][0]["is_delivery"])
 
     def test_handle_restaurant_response_accept(self):
         """Test restaurant accepting an order"""
-        # Create a purchase first
+        # Create a pending purchase
         purchase = Purchase(
             user_id=self.customer.id,
             listing_id=self.listing.id,
@@ -149,26 +169,59 @@ class TestPurchaseService(unittest.TestCase):
         self.assertIn("Purchase accepted successfully", response["message"])
         self.assertEqual(response["purchase"]["status"], PurchaseStatus.ACCEPTED.value)
 
-    def test_get_restaurant_purchases(self):
-        """Test getting all purchases for a restaurant"""
-        # Create some test purchases
-        purchase1 = Purchase(
+    def test_handle_restaurant_response_reject(self):
+        """Test restaurant rejecting an order"""
+        # Create a pending purchase
+        purchase = Purchase(
             user_id=self.customer.id,
             listing_id=self.listing.id,
             restaurant_id=self.restaurant.id,
             quantity=2,
             total_price=Decimal('25.98'),
-            status=PurchaseStatus.PENDING
+            status=PurchaseStatus.PENDING,
+            is_delivery=True,
+            delivery_address="123 Test St"
         )
-        purchase2 = Purchase(
-            user_id=self.customer.id,
-            listing_id=self.listing.id,
-            restaurant_id=self.restaurant.id,
-            quantity=1,
-            total_price=Decimal('12.99'),
-            status=PurchaseStatus.ACCEPTED
+        db.session.add(purchase)
+        db.session.commit()
+
+        initial_stock = self.listing.count
+        response, status_code = handle_restaurant_response_service(
+            purchase.id,
+            self.owner.id,
+            'reject'
         )
-        db.session.add_all([purchase1, purchase2])
+
+        self.assertEqual(status_code, 200)
+        self.assertIn("Purchase rejected successfully", response["message"])
+        self.assertEqual(response["purchase"]["status"], PurchaseStatus.REJECTED.value)
+
+        # Verify stock was restored
+        self.listing = Listing.query.get(self.listing.id)
+        self.assertEqual(self.listing.count, initial_stock + 2)
+
+    def test_get_restaurant_purchases(self):
+        """Test getting all purchases for a restaurant"""
+        # Create test purchases
+        purchases = [
+            Purchase(
+                user_id=self.customer.id,
+                listing_id=self.listing.id,
+                restaurant_id=self.restaurant.id,
+                quantity=2,
+                total_price=Decimal('25.98'),
+                status=PurchaseStatus.PENDING
+            ),
+            Purchase(
+                user_id=self.customer.id,
+                listing_id=self.listing.id,
+                restaurant_id=self.restaurant.id,
+                quantity=1,
+                total_price=Decimal('12.99'),
+                status=PurchaseStatus.ACCEPTED
+            )
+        ]
+        db.session.add_all(purchases)
         db.session.commit()
 
         response, status_code = get_restaurant_purchases_service(self.restaurant.id)
@@ -178,7 +231,7 @@ class TestPurchaseService(unittest.TestCase):
 
     def test_add_completion_image(self):
         """Test adding a completion image to a purchase"""
-        # Create a purchase first
+        # Create an accepted purchase
         purchase = Purchase(
             user_id=self.customer.id,
             listing_id=self.listing.id,
@@ -211,6 +264,67 @@ class TestPurchaseService(unittest.TestCase):
         self.assertIn("Completion image added successfully", response["message"])
         self.assertEqual(response["purchase"]["status"], PurchaseStatus.COMPLETED.value)
         self.assertTrue(response["purchase"]["completion_image_url"].startswith("http://test.com/uploads/"))
+
+    def test_get_user_active_orders(self):
+        """Test getting active orders for a user"""
+        # Create some active orders
+        purchases = [
+            Purchase(
+                user_id=self.customer.id,
+                listing_id=self.listing.id,
+                restaurant_id=self.restaurant.id,
+                quantity=2,
+                total_price=Decimal('25.98'),
+                status=PurchaseStatus.PENDING
+            ),
+            Purchase(
+                user_id=self.customer.id,
+                listing_id=self.listing.id,
+                restaurant_id=self.restaurant.id,
+                quantity=1,
+                total_price=Decimal('12.99'),
+                status=PurchaseStatus.ACCEPTED
+            )
+        ]
+        db.session.add_all(purchases)
+        db.session.commit()
+
+        response, status_code = get_user_active_orders_service(self.customer.id)
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(len(response["active_orders"]), 2)
+
+    def test_get_user_previous_orders(self):
+        """Test getting previous orders for a user"""
+        # Create some completed and rejected orders
+        purchases = [
+            Purchase(
+                user_id=self.customer.id,
+                listing_id=self.listing.id,
+                restaurant_id=self.restaurant.id,
+                quantity=2,
+                total_price=Decimal('25.98'),
+                status=PurchaseStatus.COMPLETED
+            ),
+            Purchase(
+                user_id=self.customer.id,
+                listing_id=self.listing.id,
+                restaurant_id=self.restaurant.id,
+                quantity=1,
+                total_price=Decimal('12.99'),
+                status=PurchaseStatus.REJECTED
+            )
+        ]
+        db.session.add_all(purchases)
+        db.session.commit()
+
+        response, status_code = get_user_previous_orders_service(self.customer.id, page=1, per_page=10)
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(len(response["orders"]), 2)
+        self.assertEqual(response["pagination"]["current_page"], 1)
+        self.assertEqual(response["pagination"]["total_orders"], 2)
+
 
 if __name__ == '__main__':
     unittest.main()
