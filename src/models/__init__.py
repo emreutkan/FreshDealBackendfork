@@ -11,6 +11,7 @@ from .restaurant_model import Restaurant
 from .user_favorites_model import UserFavorites
 from .user_cart_model import UserCart
 from .listing_model import Listing
+from .discount_earned import DiscountEarned
 
 # Finally, import models that depend on multiple other models
 from .purchase_model import Purchase
@@ -30,5 +31,6 @@ __all__ = [
     'Purchase',
     'RestaurantComment',
     'PurchaseReport',
-    'UserDevice'
+    'UserDevice',
+    'DiscountEarned'
 ]

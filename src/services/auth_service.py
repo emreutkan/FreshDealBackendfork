@@ -133,7 +133,6 @@ def login_user(data, client_ip):
     # You could later add "verify_code" step here.
     logger.info("Failed to process login step.")
     return {"success": False, "message": "Failed to process login."}, 400
-
 def register_user(data):
     """
     Process user registration.
@@ -213,28 +212,32 @@ def register_user(data):
                 message = f"Your verification code is: {code}. This code will expire in 10 minutes."
                 send_email(email, subject, message)
                 logger.info(f"Verification email sent successfully to {email}")
+                return {
+                    "success": True,
+                    "message": "User registered successfully! Verification email sent.",
+                    "email_sent": True
+                }, 201
             except Exception as email_error:
                 # Log the email sending error but continue with registration
                 logger.error(f"Failed to send verification email to {email}: {str(email_error)}")
-                # Return success but indicate email sending failed
+                # Return success even if email sending failed
                 return {
                     "success": True,
-                    "message": "User registered successfully! Verification email could not be sent.",
+                    "message": "User registered successfully! Email verification will be available later.",
                     "email_sent": False
                 }, 201
 
-        # Return success if everything went well
+        # Return success if no email was provided
         return {
             "success": True,
             "message": "User registered successfully!",
-            "email_sent": True if email else None
+            "email_sent": None
         }, 201
 
     except Exception as e:
         logger.error(f"Error during registration: {str(e)}")
         db.session.rollback()
         return {"success": False, "message": "An error occurred during registration."}, 500
-
 def verify_email_code(data, client_ip):
     """
     Verify an email using the provided verification code.
