@@ -8,6 +8,8 @@ from src.models import db, UserCart, Listing, Purchase, Restaurant
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.models.purchase_model import PurchaseStatus
+from src.services.notification_service import NotificationService
+
 def create_purchase_order_service(user_id, data=None):
     """
      Creates a pending purchase order
@@ -142,6 +144,40 @@ def handle_restaurant_response_service(purchase_id, owner_id, action, completion
 
             db.session.commit()
             print(f"[DEBUG] Purchase {action}ed successfully.")
+
+            # Send notification to user based on action
+            try:
+                user_id = purchase.user_id
+                listing = purchase.listing
+                restaurant_name = restaurant.restaurantName
+
+                if action == 'accept':
+                    NotificationService.send_notification_to_user(
+                        user_id=user_id,
+                        title="Order Accepted",
+                        body=f"Your order for {listing.title} from {restaurant_name} has been accepted!",
+                        data={
+                            "type": "order_status",
+                            "purchase_id": purchase.id,
+                            "status": "accepted"
+                        }
+                    )
+                else:  # action == 'reject'
+                    NotificationService.send_notification_to_user(
+                        user_id=user_id,
+                        title="Order Rejected",
+                        body=f"Unfortunately, your order for {listing.title} from {restaurant_name} has been rejected.",
+                        data={
+                            "type": "order_status",
+                            "purchase_id": purchase.id,
+                            "status": "rejected"
+                        }
+                    )
+                print(f"[DEBUG] Notification sent to user {user_id} for {action} action.")
+            except Exception as e:
+                # Log the error but don't disrupt the main flow
+                print(f"[DEBUG] Failed to send notification: {str(e)}")
+
             return {
                 "message": f"Purchase {action}ed successfully",
                 "purchase": purchase.to_dict(include_relations=True)
@@ -369,6 +405,28 @@ def add_completion_image_service(purchase_id, owner_id, file_obj, url_for_func):
 
             db.session.commit()
             print("[DEBUG] Completion image added and purchase updated successfully.")
+
+            # Send notification about order completion
+            try:
+                user_id = purchase.user_id
+                listing = purchase.listing
+                restaurant_name = restaurant.restaurantName
+
+                NotificationService.send_notification_to_user(
+                    user_id=user_id,
+                    title="Order Ready for Pickup",
+                    body=f"Your order for {listing.title} from {restaurant_name} is ready! Restaurant has uploaded a confirmation image.",
+                    data={
+                        "type": "order_completed",
+                        "purchase_id": purchase.id,
+                        "image_url": image_url
+                    }
+                )
+                print(f"[DEBUG] Completion notification sent to user {user_id}")
+            except Exception as e:
+                # Log the error but don't disrupt the main flow
+                print(f"[DEBUG] Failed to send completion notification: {str(e)}")
+
             return {
                 "message": "Completion image added successfully",
                 "purchase": purchase.to_dict(include_relations=True)

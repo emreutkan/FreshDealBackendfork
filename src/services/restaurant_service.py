@@ -5,7 +5,6 @@ from math import radians, cos, sin, asin, sqrt
 from werkzeug.utils import secure_filename
 from src.models import db, Restaurant, RestaurantComment, Purchase
 
-# You can define the upload folder and allowed extensions globally if needed.
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "routes"))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webm'}
@@ -40,6 +39,7 @@ def restaurant_to_dict(restaurant):
         "restaurantPhone": restaurant.restaurantPhone if restaurant.restaurantPhone else None,
     }
 
+
 def create_restaurant_service(owner_id, form, files, url_for_func):
     """
     Create a new restaurant using multipart/form-data values.
@@ -51,7 +51,6 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
 
     :return: Tuple (response dict, HTTP status code)
     """
-    # Retrieve owner’s information should be done in routes.
     restaurant_name = form.get('restaurantName')
     restaurant_description = form.get('restaurantDescription')
     longitude = form.get('longitude')
@@ -69,7 +68,6 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
     restaurant_email = form.get('restaurantEmail')
     restaurant_phone = form.get('restaurantPhone')
 
-    # Validate required fields.
     if not restaurant_name:
         return {"success": False, "message": "Restaurant name is required"}, 400
     if not category:
@@ -88,7 +86,6 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
     except ValueError:
         return {"success": False, "message": "Invalid format for numeric fields"}, 400
 
-    # Handle optional file upload.
     image_url = None
     file = files.get("image")
     if file and allowed_file(file.filename):
@@ -97,10 +94,9 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
         filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
         file.save(filepath)
         image_url = url_for_func('api_v1.restaurant.get_uploaded_file', filename=unique_filename, _external=True)
-    elif file:  # File provided but not allowed.
+    elif file:
         return {"success": False, "message": "Invalid image file type"}, 400
 
-    # Prepare working days as a comma-separated string.
     working_days_str = ",".join(working_days) if working_days else ""
 
     new_restaurant = Restaurant(
@@ -127,12 +123,64 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
 
     db.session.add(new_restaurant)
     db.session.commit()
+
+    # New notification code
+    try:
+        # Find users with primary addresses
+        from src.models import CustomerAddress, User
+        from src.services.notification_service import NotificationService
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Find users with primary addresses
+        primary_addresses = db.session.query(CustomerAddress, User).join(
+            User,
+            CustomerAddress.user_id == User.id
+        ).filter(
+            CustomerAddress.is_primary == True
+        ).all()
+
+        for address, user in primary_addresses:
+            # Use your existing haversine calculation or just calculate distance directly
+            # This uses the one from your get_restaurants_proximity_service function
+            user_lat = float(address.latitude)
+            user_lon = float(address.longitude)
+            rest_lat = float(latitude)
+            rest_lon = float(longitude)
+
+            # Convert degrees to radians
+            from math import radians, cos, sin, asin, sqrt
+            user_lat, user_lon, rest_lat, rest_lon = map(radians, [user_lat, user_lon, rest_lat, rest_lon])
+            d_lat = rest_lat - user_lat
+            d_lon = rest_lon - user_lon
+            a = sin(d_lat / 2) ** 2 + cos(user_lat) * cos(rest_lat) * sin(d_lon / 2) ** 2
+            c = 2 * asin(sqrt(a))
+            earth_radius = 6371  # km
+            distance = c * earth_radius
+
+            # Only notify users within 5km
+            if distance <= 5.0:
+                NotificationService.send_notification_to_user(
+                    user_id=user.id,
+                    title="New Restaurant Opened Nearby!",
+                    body=f"{restaurant_name} has just opened near your location. Check it out!",
+                    data={
+                        "type": "new_restaurant",
+                        "restaurant_id": new_restaurant.id,
+                        "screen": "RestaurantDetailScreen"
+                    }
+                )
+    except Exception as e:
+        # Just log the error but don't disrupt the main flow
+        print(f"Error notifying users about new restaurant: {str(e)}")
+    # End of notification code
+
     return {
         "success": True,
         "message": "Restaurant added successfully!",
         "restaurant": restaurant_to_dict(new_restaurant)
     }, 201
-
 
 def get_restaurants_service(owner_id):
     """
@@ -168,7 +216,6 @@ def get_restaurants_service(owner_id):
             "restaurantPhone": restaurant.restaurantPhone if restaurant.restaurantPhone else None,
         })
     return serialized, 200
-
 
 def get_restaurant_service(restaurant_id):
     """
@@ -212,8 +259,6 @@ def get_restaurant_service(restaurant_id):
         ]
     }
     return restaurant_data, 200
-
-
 
 def get_restaurants_proximity_service(user_lat, user_lon, radius=10):
     """
@@ -273,7 +318,6 @@ def get_restaurants_proximity_service(user_lat, user_lon, radius=10):
     nearby.sort(key=lambda x: x['distance_km'])
     return {"restaurants": nearby}, 200
 
-
 def add_comment_service(restaurant_id, user_id, data):
     """
     Add a comment (and rating) for a restaurant.
@@ -294,16 +338,14 @@ def add_comment_service(restaurant_id, user_id, data):
     if not purchase_id:
         return {"success": False, "message": "Purchase ID is required"}, 400
 
-    # Validate purchase ownership and correspondence.
     purchase = Purchase.query.filter_by(id=purchase_id, user_id=user_id).first()
     if not purchase:
         return {"success": False, "message": "No valid purchase found for the user"}, 403
 
-    listing = purchase.listing  # Assuming relationship exists.
+    listing = purchase.listing
     if not listing or listing.restaurant_id != restaurant_id:
         return {"success": False, "message": "Purchase does not correspond to this restaurant"}, 403
 
-    # Prevent duplicate comments.
     if RestaurantComment.query.filter_by(purchase_id=purchase_id).first():
         return {"success": False, "message": "You have already commented on this purchase"}, 403
 
@@ -322,7 +364,6 @@ def add_comment_service(restaurant_id, user_id, data):
         rating=rating
     )
     db.session.add(new_comment)
-    # Update restaurant rating (assuming Restaurant.update_rating exists)
     restaurant.update_rating(rating)
     db.session.commit()
     return {"success": True, "message": "Comment added successfully"}, 201
@@ -341,11 +382,9 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
     if not restaurant:
         return {"success": False, "message": f"Restaurant with ID {restaurant_id} not found"}, 404
 
-    # Check ownership
     if str(owner_id) != str(restaurant.owner_id):
         return {"success": False, "message": "You are not the owner of this restaurant."}, 403
 
-    # Retrieve and validate form fields
     restaurant_name = form.get('restaurantName', restaurant.restaurantName)
     restaurant_description = form.get('restaurantDescription', restaurant.restaurantDescription)
     longitude = form.get('longitude', restaurant.longitude)
@@ -354,7 +393,7 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
     working_hours_start = form.get('workingHoursStart', restaurant.workingHoursStart)
     working_hours_end = form.get('workingHoursEnd', restaurant.workingHoursEnd)
     listings = form.get('listings', restaurant.listings)
-    working_days = form.getlist('workingDays')  # or keep existing if not submitted
+    working_days = form.getlist('workingDays')
     pickup = form.get('pickup')
     delivery = form.get('delivery')
     delivery_fee = form.get('deliveryFee', restaurant.deliveryFee)
@@ -363,13 +402,11 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
     restaurant_email = form.get('restaurantEmail', restaurant.restaurantEmail)
     restaurant_phone = form.get('restaurantPhone', restaurant.restaurantPhone)
 
-    # Convert booleans
     if pickup is not None:
         pickup = pickup.lower() == 'true'
     if delivery is not None:
         delivery = delivery.lower() == 'true'
 
-    # Validate required fields if needed
     if not restaurant_name:
         return {"success": False, "message": "Restaurant name is required"}, 400
     if not category:
@@ -377,7 +414,6 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
     if longitude is None or latitude is None:
         return {"success": False, "message": "Longitude and latitude are required"}, 400
 
-    # Convert numeric fields
     try:
         longitude = float(longitude)
         latitude = float(latitude)
@@ -391,10 +427,8 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
     except ValueError:
         return {"success": False, "message": "Invalid format for numeric fields"}, 400
 
-    # Handle optional file upload
     file = files.get("image")
     if file and allowed_file(file.filename):
-        # Remove old file if any
         if restaurant.image_url:
             try:
                 old_filename = restaurant.image_url.split('/')[-1]
@@ -404,22 +438,19 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
             except Exception as e:
                 print(f"Failed to delete old image file: {e}")
 
-        # Save the new file
         original_filename = secure_filename(file.filename)
         unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
         filepath = os.path.join(UPLOAD_FOLDER, unique_filename)
         file.save(filepath)
         image_url = url_for_func('api_v1.restaurant.get_uploaded_file', filename=unique_filename, _external=True)
         restaurant.image_url = image_url
-    elif file:  # File provided but not allowed
+    elif file:
         return {"success": False, "message": "Invalid image file type"}, 400
 
-    # Update workingDays if provided
     if working_days:
         working_days_str = ",".join(working_days)
         restaurant.workingDays = working_days_str
 
-    # Assign updated fields
     restaurant.restaurantName = restaurant_name
     restaurant.restaurantDescription = restaurant_description
     restaurant.longitude = longitude
@@ -441,7 +472,6 @@ def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func
         restaurant.restaurantPhone = restaurant_phone
 
 
-    # Commit changes
     db.session.commit()
     return {
         "success": True,
