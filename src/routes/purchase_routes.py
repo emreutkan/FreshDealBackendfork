@@ -11,6 +11,7 @@ from src.services.purchase_service import (
     get_user_previous_orders_service,
     get_order_details_service,
 )
+from src.services.gamification_services import add_discount_point
 
 purchase_bp = Blueprint("purchase", __name__)
 
@@ -411,6 +412,7 @@ def get_restaurant_purchases(restaurant_id):
 def accept_purchase(purchase_id):
     restaurant_id = get_jwt_identity()
     response, status = handle_restaurant_response_service(purchase_id, restaurant_id, 'accept')
+    add_discount_point(purchase_id)
     return jsonify(response), status
 
 
