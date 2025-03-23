@@ -49,3 +49,55 @@ def get_user_rankings():
         rank += 1
 
     return jsonify(user_rankings)
+
+
+def get_single_user_rank(user_id):
+    """
+    Get the rank of a specific user based on their total discount earned.
+
+    Args:
+        user_id: The ID of the user whose rank we want to find
+
+    Returns:
+        JSON response with the user's rank information or an error message
+    """
+    # First check if the user exists
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Get the user's total discount
+    user_discount = db.session.query(
+        func.sum(DiscountEarned.discount).label('total_discount')
+    ) \
+        .filter(DiscountEarned.user_id == user_id) \
+        .scalar()
+
+    if user_discount is None:
+        user_discount = 0.0
+    else:
+        user_discount = float(user_discount)
+
+    # Get the count of users with higher total discount
+    higher_ranked_count = db.session.query(func.count()) \
+        .select_from(
+        db.session.query(
+            DiscountEarned.user_id,
+            func.sum(DiscountEarned.discount).label('total_disc')
+        ) \
+            .group_by(DiscountEarned.user_id) \
+            .having(func.sum(DiscountEarned.discount) > user_discount) \
+            .subquery()
+    ) \
+        .scalar()
+
+    # User's rank is the count of users with higher discount + 1
+    rank = higher_ranked_count + 1
+
+    return jsonify({
+        'user_id': user_id,
+        'user_name': user.name,
+        'rank': rank,
+        'total_discount': user_discount
+    })
+
