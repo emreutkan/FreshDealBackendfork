@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.models.purchase_model import PurchaseStatus
 from src.services.notification_service import NotificationService
+from src.services.achievement_service import AchievementService
 
 def create_purchase_order_service(user_id, data=None):
     """
@@ -406,6 +407,34 @@ def add_completion_image_service(purchase_id, owner_id, file_obj, url_for_func):
             db.session.commit()
             print("[DEBUG] Completion image added and purchase updated successfully.")
 
+            # Check and award achievements
+            try:
+                newly_earned_achievements = AchievementService.check_and_award_achievements(purchase.user_id,
+                                                                                            purchase.id)
+
+                # If achievements were earned, prepare notification data
+                if newly_earned_achievements:
+                    achievement_names = [ach.name for ach in newly_earned_achievements]
+                    achievement_notification = {
+                        "achievements_earned": achievement_names
+                    }
+
+                    # Send notification to user for earned achievements
+                    try:
+                        for achievement in newly_earned_achievements:
+                            NotificationService.send_notification_to_user(
+                                user_id=purchase.user_id,
+                                title=f"Achievement Unlocked: {achievement.name}",
+                                body=f"Congratulations! You've earned the {achievement.name} achievement: {achievement.description}",
+                                data={
+                                    "type": "achievement",
+                                    "achievement_id": achievement.id
+                                }
+                            )
+                    except Exception as notify_error:
+                        print(f"[DEBUG] Failed to send achievement notification: {str(notify_error)}")
+            except Exception as ach_error:
+                print(f"[DEBUG] Error checking achievements: {str(ach_error)}")
             # Send notification about order completion
             try:
                 user_id = purchase.user_id

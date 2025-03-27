@@ -14,11 +14,11 @@ from .listing_model import Listing
 from .discount_earned import DiscountEarned
 
 # Finally, import models that depend on multiple other models
-from .purchase_model import Purchase
+from .purchase_model import Purchase, PurchaseStatus
 from .restaurant_comments_model import RestaurantComment
 from .purchase_report import PurchaseReport
 from .device import UserDevice
-from .achievement_model import Achievement
+from .achievement_model import Achievement, UserAchievement, AchievementType
 
 # Export all models
 __all__ = [
@@ -30,8 +30,12 @@ __all__ = [
     'UserFavorites',
     'UserCart',
     'Purchase',
+    'PurchaseStatus',
     'RestaurantComment',
     'PurchaseReport',
     'UserDevice',
-    'DiscountEarned'
+    'DiscountEarned',
+    'Achievement',
+    'UserAchievement',
+    'AchievementType'
 ]
