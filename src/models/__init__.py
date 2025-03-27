@@ -18,6 +18,7 @@ from .purchase_model import Purchase
 from .restaurant_comments_model import RestaurantComment
 from .purchase_report import PurchaseReport
 from .device import UserDevice
+from .achievement_model import Achievement
 
 # Export all models
 __all__ = [
