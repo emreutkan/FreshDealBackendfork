@@ -4,6 +4,7 @@ from src.routes.auth_routes import auth_bp
 from src.routes.address_routes import addresses_bp
 from src.routes.report_routes import report_bp
 from src.routes.restaurant_routes import restaurant_bp
+from src.routes.static_routes import static_bp
 from src.routes.user_routes import user_bp
 from src.routes.listing_routes import listings_bp
 from src.routes.cart_routes import cart_bp
@@ -26,4 +27,6 @@ def init_app(app):
     api_v1.register_blueprint(notification_bp)
     api_v1.register_blueprint(gamification_bp)
     api_v1.register_blueprint(achievement_bp)
+    app.register_blueprint(static_bp)
+
     app.register_blueprint(api_v1)
