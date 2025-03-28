@@ -3,11 +3,21 @@ from src.models import db, DiscountEarned, User, Purchase, Listing
 from sqlalchemy import func
 from datetime import datetime
 
+
 def add_discount_point(purchase_id):
     purchase = Purchase.query.filter_by(id=purchase_id).first()
+    if not purchase:
+        print(f"[DEBUG] Purchase with id {purchase_id} not found.")
+        return
+
     user_id = purchase.user_id
 
-    listing = Listing.query.filter_by(id=purchase.listing_id)
+    # Fix: Add .first() to get the actual Listing object
+    listing = Listing.query.filter_by(id=purchase.listing_id).first()
+    if not listing:
+        print(f"[DEBUG] Listing with id {purchase.listing_id} not found.")
+        return
+
     discount = (purchase.quantity * float(listing.original_price)) - float(purchase.total_price)
 
     new_discount_point = DiscountEarned(
@@ -18,7 +28,6 @@ def add_discount_point(purchase_id):
 
     db.session.add(new_discount_point)
     db.session.commit()
-
 
 def get_user_rankings():
     results = db.session.query(

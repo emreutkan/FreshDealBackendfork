@@ -11,6 +11,7 @@ class User(db.Model):
     password = db.Column(String(1280), nullable=False)
     role = db.Column(String(20), nullable=False, default='customer')
     email_verified = db.Column(Boolean, nullable=False, default=False)
+    achievements = relationship('UserAchievement', back_populates='user')
 
     __table_args__ = (
         CheckConstraint("role IN ('customer', 'owner')", name='role_check'),
