@@ -5,13 +5,14 @@ from datetime import datetime, UTC
 from flask import Blueprint, request, jsonify, url_for, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
+
+from src.services.restaurant_comment_service import add_comment_service
 from src.services.restaurant_service import (
     create_restaurant_service,
     get_restaurants_service,
     get_restaurant_service,
     delete_restaurant_service,
     get_restaurants_proximity_service,
-    add_comment_service
 )
 from src.models import User
 
@@ -358,18 +359,86 @@ def get_restaurants_proximity():
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
 
 
+# @restaurant_bp.route("/restaurants/<int:restaurant_id>/comments", methods=["POST"])
+# @jwt_required()
+# def add_comment(restaurant_id):
+#     """
+#     Add a comment to a restaurant.
+#
+#     Expects a JSON payload with:
+#       - comment (string, required)
+#       - rating (number between 0 and 5, required)
+#       - purchase_id (integer, required)
+#
+#     ---
+#     tags:
+#       - Restaurant
+#     security:
+#       - BearerAuth: []
+#     parameters:
+#       - in: path
+#         name: restaurant_id
+#         required: true
+#         schema:
+#           type: integer
+#     requestBody:
+#       required: true
+#       content:
+#         application/json:
+#           schema:
+#             type: object
+#             required:
+#               - comment
+#               - rating
+#               - purchase_id
+#             properties:
+#               comment:
+#                 type: string
+#               rating:
+#                 type: number
+#               purchase_id:
+#                 type: integer
+#     responses:
+#       201:
+#         description: Comment added successfully.
+#       400:
+#         description: Missing or invalid input.
+#       403:
+#         description: Forbidden (invalid purchase or duplicate comment).
+#       500:
+#         description: An error occurred.
+#     """
+#     try:
+#         user_id = get_jwt_identity()
+#         data = request.get_json()
+#         response, status = add_comment_service(restaurant_id, user_id, data)
+#         return jsonify(response), status
+#     except Exception as e:
+#         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
+
+
 @restaurant_bp.route("/restaurants/<int:restaurant_id>/comments", methods=["POST"])
 @jwt_required()
 def add_comment(restaurant_id):
     """
-    Add a comment to a restaurant.
+    Add a comment with optional badge awards to a restaurant.
 
-    Expects a JSON payload with:
-      - comment (string, required)
-      - rating (number between 0 and 5, required)
-      - purchase_id (integer, required)
+    This endpoint enables an authenticated user to submit a comment along with a rating for a restaurant.
+    The request payload must include:
+      - **comment**: The text of the comment.
+      - **rating**: The rating value (between 0 and 5).
+      - **purchase_id**: The identifier of the purchase related to this comment.
+
+    Additionally, the payload may include:
+      - **badge_names**: An array of badge names to award the restaurant.
+        Valid badge names are: `fresh`, `fast_delivery`, and `customer_friendly`.
 
     ---
+    summary: Add a comment with optional badge awards for a restaurant.
+    description: >
+      Submit a comment and rating for a restaurant. Optionally, award one or more badge points to the restaurant
+      by providing an array of badge names in the **badge_names** field. Each badge in the array will trigger the
+      corresponding badge point award.
     tags:
       - Restaurant
     security:
@@ -380,6 +449,7 @@ def add_comment(restaurant_id):
         required: true
         schema:
           type: integer
+        description: Unique ID of the restaurant to comment on.
     requestBody:
       required: true
       content:
@@ -393,19 +463,95 @@ def add_comment(restaurant_id):
             properties:
               comment:
                 type: string
+                description: The text content of the comment.
               rating:
                 type: number
+                description: The rating given by the user (must be between 0 and 5).
+                minimum: 0
+                maximum: 5
               purchase_id:
                 type: integer
+                description: The ID of the purchase associated with this comment.
+              badge_names:
+                type: array
+                description: >
+                  (Optional) An array of badge names to award the restaurant. Each badge name must be one of:
+                  `fresh`, `fast_delivery`, or `customer_friendly`.
+                items:
+                  type: string
+                  enum: [fresh, fast_delivery, customer_friendly]
+          examples:
+            CommentWithBadges:
+              summary: Submit a comment with multiple badge awards.
+              value:
+                comment: "Great service and delicious food!"
+                rating: 4.5
+                purchase_id: 123
+                badge_names:
+                  - fresh
+                  - customer_friendly
+            CommentWithoutBadges:
+              summary: Submit a comment without awarding any badges.
+              value:
+                comment: "Not bad, but room for improvement."
+                rating: 3
+                purchase_id: 124
     responses:
       201:
         description: Comment added successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Comment added successfully"
       400:
         description: Missing or invalid input.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                  example: "Comment text is required"
       403:
-        description: Forbidden (invalid purchase or duplicate comment).
+        description: Forbidden (e.g., invalid purchase or duplicate comment).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                  example: "No valid purchase found for the user"
       500:
-        description: An error occurred.
+        description: An error occurred during comment submission.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                  example: "An error occurred"
+                error:
+                  type: string
+                  example: "Detailed error message"
     """
     try:
         user_id = get_jwt_identity()
@@ -413,7 +559,12 @@ def add_comment(restaurant_id):
         response, status = add_comment_service(restaurant_id, user_id, data)
         return jsonify(response), status
     except Exception as e:
-        return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "message": "An error occurred",
+            "error": str(e)
+        }), 500
+
 
 @restaurant_bp.route("/restaurants/<int:restaurant_id>", methods=["PUT"])
 @jwt_required()
