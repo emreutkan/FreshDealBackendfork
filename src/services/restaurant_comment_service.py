@@ -67,6 +67,5 @@ def add_comment_service(restaurant_id, user_id, data):
                 add_restaurant_badge_point(restaurant_id, badge_name)
             except Exception as e:
                 # Log the error but don't block the comment submission.
-                print(f"Error adding restaurant badge point for badge '{badge_name}': {str(e)}")
-
+                logging.error(f"Error adding restaurant badge point for badge '{badge_name}': {str(e)}")
     return {"success": True, "message": "Comment added successfully"}, 201
