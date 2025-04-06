@@ -43,7 +43,7 @@ def get_badges(restaurant_id):
             restaurant_id: 1
             badges:
               - fresh
-              - super_fast_delivery
+              - fast_delivery
       500:
         description: An error occurred while retrieving badges.
         schema:
