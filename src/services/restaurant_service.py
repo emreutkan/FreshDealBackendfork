@@ -4,6 +4,7 @@ import os
 from math import radians, cos, sin, asin, sqrt
 from werkzeug.utils import secure_filename
 from src.models import db, Restaurant, RestaurantComment, Purchase
+from src.services.restaurant_badge_services import add_restaurant_badge_point
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "routes"))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
@@ -318,55 +319,6 @@ def get_restaurants_proximity_service(user_lat, user_lon, radius=10):
     nearby.sort(key=lambda x: x['distance_km'])
     return {"restaurants": nearby}, 200
 
-def add_comment_service(restaurant_id, user_id, data):
-    """
-    Add a comment (and rating) for a restaurant.
-    Expects data containing 'comment', 'rating', and 'purchase_id'.
-    """
-    restaurant = Restaurant.query.get(restaurant_id)
-    if not restaurant:
-        return {"success": False, "message": f"Restaurant with ID {restaurant_id} not found"}, 404
-
-    comment_text = data.get("comment")
-    rating = data.get("rating")
-    purchase_id = data.get("purchase_id")
-
-    if not comment_text:
-        return {"success": False, "message": "Comment text is required"}, 400
-    if rating is None:
-        return {"success": False, "message": "Rating is required"}, 400
-    if not purchase_id:
-        return {"success": False, "message": "Purchase ID is required"}, 400
-
-    purchase = Purchase.query.filter_by(id=purchase_id, user_id=user_id).first()
-    if not purchase:
-        return {"success": False, "message": "No valid purchase found for the user"}, 403
-
-    listing = purchase.listing
-    if not listing or listing.restaurant_id != restaurant_id:
-        return {"success": False, "message": "Purchase does not correspond to this restaurant"}, 403
-
-    if RestaurantComment.query.filter_by(purchase_id=purchase_id).first():
-        return {"success": False, "message": "You have already commented on this purchase"}, 403
-
-    try:
-        rating = float(rating)
-        if not (0 <= rating <= 5):
-            return {"success": False, "message": "Rating must be between 0 and 5"}, 400
-    except ValueError:
-        return {"success": False, "message": "Invalid rating format"}, 400
-
-    new_comment = RestaurantComment(
-        restaurant_id=restaurant_id,
-        user_id=user_id,
-        purchase_id=purchase_id,
-        comment=comment_text,
-        rating=rating
-    )
-    db.session.add(new_comment)
-    restaurant.update_rating(rating)
-    db.session.commit()
-    return {"success": True, "message": "Comment added successfully"}, 201
 
 def update_restaurant_service(restaurant_id, owner_id, form, files, url_for_func):
     """
