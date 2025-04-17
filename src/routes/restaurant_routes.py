@@ -14,7 +14,7 @@ from src.services.restaurant_service import (
     delete_restaurant_service,
     get_restaurants_proximity_service,
 )
-from src.models import User
+from src.models import User, RestaurantComment
 
 restaurant_bp = Blueprint("restaurant", __name__)
 
@@ -358,65 +358,6 @@ def get_restaurants_proximity():
     except Exception as e:
         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
 
-
-# @restaurant_bp.route("/restaurants/<int:restaurant_id>/comments", methods=["POST"])
-# @jwt_required()
-# def add_comment(restaurant_id):
-#     """
-#     Add a comment to a restaurant.
-#
-#     Expects a JSON payload with:
-#       - comment (string, required)
-#       - rating (number between 0 and 5, required)
-#       - purchase_id (integer, required)
-#
-#     ---
-#     tags:
-#       - Restaurant
-#     security:
-#       - BearerAuth: []
-#     parameters:
-#       - in: path
-#         name: restaurant_id
-#         required: true
-#         schema:
-#           type: integer
-#     requestBody:
-#       required: true
-#       content:
-#         application/json:
-#           schema:
-#             type: object
-#             required:
-#               - comment
-#               - rating
-#               - purchase_id
-#             properties:
-#               comment:
-#                 type: string
-#               rating:
-#                 type: number
-#               purchase_id:
-#                 type: integer
-#     responses:
-#       201:
-#         description: Comment added successfully.
-#       400:
-#         description: Missing or invalid input.
-#       403:
-#         description: Forbidden (invalid purchase or duplicate comment).
-#       500:
-#         description: An error occurred.
-#     """
-#     try:
-#         user_id = get_jwt_identity()
-#         data = request.get_json()
-#         response, status = add_comment_service(restaurant_id, user_id, data)
-#         return jsonify(response), status
-#     except Exception as e:
-#         return jsonify({"success": False, "message": "An error occurred", "error": str(e)}), 500
-
-
 @restaurant_bp.route("/restaurants/<int:restaurant_id>/comments", methods=["POST"])
 @jwt_required()
 def add_comment(restaurant_id):
@@ -431,14 +372,16 @@ def add_comment(restaurant_id):
 
     Additionally, the payload may include:
       - **badge_names**: An array of badge names to award the restaurant.
-        Valid badge names are: `fresh`, `fast_delivery`, and `customer_friendly`.
+        Valid badge names are:
+        - Positive: `fresh`, `fast_delivery`, `customer_friendly`
+        - Negative: `not_fresh`, `slow_delivery`, `not_customer_friendly`
 
     ---
     summary: Add a comment with optional badge awards for a restaurant.
     description: >
       Submit a comment and rating for a restaurant. Optionally, award one or more badge points to the restaurant
       by providing an array of badge names in the **badge_names** field. Each badge in the array will trigger the
-      corresponding badge point award.
+      corresponding badge point award. Both positive and negative badges can be awarded.
     tags:
       - Restaurant
     security:
@@ -476,13 +419,20 @@ def add_comment(restaurant_id):
                 type: array
                 description: >
                   (Optional) An array of badge names to award the restaurant. Each badge name must be one of:
-                  `fresh`, `fast_delivery`, or `customer_friendly`.
+                  Positive badges: `fresh`, `fast_delivery`, `customer_friendly`
+                  Negative badges: `not_fresh`, `slow_delivery`, `not_customer_friendly`
                 items:
                   type: string
-                  enum: [fresh, fast_delivery, customer_friendly]
+                  enum:
+                    - fresh
+                    - fast_delivery
+                    - customer_friendly
+                    - not_fresh
+                    - slow_delivery
+                    - not_customer_friendly
           examples:
-            CommentWithBadges:
-              summary: Submit a comment with multiple badge awards.
+            CommentWithPositiveBadges:
+              summary: Submit a comment with positive badge awards.
               value:
                 comment: "Great service and delicious food!"
                 rating: 4.5
@@ -490,12 +440,21 @@ def add_comment(restaurant_id):
                 badge_names:
                   - fresh
                   - customer_friendly
+            CommentWithNegativeBadges:
+              summary: Submit a comment with negative badge awards.
+              value:
+                comment: "Cold food and slow delivery"
+                rating: 2.0
+                purchase_id: 124
+                badge_names:
+                  - not_fresh
+                  - slow_delivery
             CommentWithoutBadges:
               summary: Submit a comment without awarding any badges.
               value:
-                comment: "Not bad, but room for improvement."
-                rating: 3
-                purchase_id: 124
+                comment: "Average experience"
+                rating: 3.0
+                purchase_id: 125
     responses:
       201:
         description: Comment added successfully.
@@ -565,6 +524,125 @@ def add_comment(restaurant_id):
             "error": str(e)
         }), 500
 
+@restaurant_bp.route("/restaurants/<int:restaurant_id>/comments", methods=["GET"])
+def get_restaurant_comments(restaurant_id):
+    """
+    Get all comments with badges for a restaurant.
+
+    ---
+    tags:
+      - Restaurant
+    parameters:
+      - in: path
+        name: restaurant_id
+        required: true
+        schema:
+          type: integer
+        description: Unique ID of the restaurant to get comments for.
+    responses:
+      200:
+        description: Comments retrieved successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                restaurant_id:
+                  type: integer
+                  description: The ID of the restaurant
+                comments:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        description: Comment ID
+                      user_id:
+                        type: integer
+                        description: ID of the user who made the comment
+                      comment:
+                        type: string
+                        description: The comment text
+                      rating:
+                        type: number
+                        format: float
+                        description: Rating given (0-5)
+                      timestamp:
+                        type: string
+                        format: date-time
+                        description: When the comment was made
+                      badges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: Badge name
+                            is_positive:
+                              type: boolean
+                              description: Whether this is a positive or negative badge
+            example:
+              success: true
+              restaurant_id: 123
+              comments:
+                - id: 1
+                  user_id: 456
+                  comment: "Great food!"
+                  rating: 4.5
+                  timestamp: "2025-04-17T21:27:31"
+                  badges:
+                    - name: "fresh"
+                      is_positive: true
+                    - name: "fast_delivery"
+                      is_positive: true
+      500:
+        description: An error occurred while retrieving comments.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                message:
+                  type: string
+                error:
+                  type: string
+    """
+    try:
+        comments = RestaurantComment.query.filter_by(restaurant_id=restaurant_id).all()
+        comments_data = []
+
+        for comment in comments:
+            badges_data = [{"name": badge.badge_name, "is_positive": badge.is_positive} for badge in comment.badges]
+
+            comment_data = {
+                "id": comment.id,
+                "user_id": comment.user_id,
+                "comment": comment.comment,
+                "rating": float(comment.rating),
+                "timestamp": comment.timestamp.isoformat(),
+                "badges": badges_data
+            }
+            comments_data.append(comment_data)
+
+        return jsonify({
+            "success": True,
+            "restaurant_id": restaurant_id,
+            "comments": comments_data
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "An error occurred while retrieving comments",
+            "error": str(e)
+        }), 500
 
 @restaurant_bp.route("/restaurants/<int:restaurant_id>", methods=["PUT"])
 @jwt_required()

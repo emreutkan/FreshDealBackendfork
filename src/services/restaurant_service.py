@@ -3,8 +3,7 @@ import uuid
 import os
 from math import radians, cos, sin, asin, sqrt
 from werkzeug.utils import secure_filename
-from src.models import db, Restaurant, RestaurantComment, Purchase
-from src.services.restaurant_badge_services import add_restaurant_badge_point
+from src.models import db, Restaurant
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "routes"))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")

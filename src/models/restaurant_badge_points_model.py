@@ -1,5 +1,5 @@
-from . import db
 from sqlalchemy import Integer
+from . import db
 
 class RestaurantBadgePoints(db.Model):
     __tablename__ = 'restaurant_badge_points'
@@ -9,3 +9,6 @@ class RestaurantBadgePoints(db.Model):
     freshPoint = db.Column(Integer, nullable=False, default=0)
     fastDeliveryPoint = db.Column(Integer, nullable=False, default=0)
     customerFriendlyPoint = db.Column(Integer, nullable=False, default=0)
+    notFreshPoint = db.Column(Integer, nullable=False, default=0)
+    slowDeliveryPoint = db.Column(Integer, nullable=False, default=0)
+    notCustomerFriendlyPoint = db.Column(Integer, nullable=False, default=0)
