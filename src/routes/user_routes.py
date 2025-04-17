@@ -10,7 +10,7 @@ from src.services.user_service import (
     change_email,
     add_favorite,
     remove_favorite,
-    get_favorites
+    get_favorites, get_user_recent_restaurants_service
 )
 
 user_bp = Blueprint("user", __name__)
@@ -481,3 +481,60 @@ def remove_favorite_route():
 def get_user_active_orders():
     current_user_id = get_jwt_identity()  # Get the current user's ID
     return get_user_active_orders_service(current_user_id)
+
+@user_bp.route("/user/recent-restaurants", methods=["GET"])
+@jwt_required()
+def get_recent_restaurants():
+    """
+    Get User's Recently Ordered Restaurants
+    ---
+    tags:
+      - User
+    summary: Get a list of restaurants from user's recent orders
+    description: Returns up to 20 most recently ordered restaurants for the authenticated user
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: List of recently ordered restaurants retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                restaurants:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      restaurant_id:
+                        type: integer
+                        example: 1
+                      restaurant_name:
+                        type: string
+                        example: "Pizza Place"
+                      image_url:
+                        type: string
+                        example: "http://example.com/image.jpg"
+                      last_order_date:
+                        type: string
+                        format: date-time
+                        example: "2025-04-17T23:07:07Z"
+      401:
+        description: Authentication required
+      500:
+        description: Internal server error
+    """
+    try:
+        user_id = get_jwt_identity()
+        response, status = get_user_recent_restaurants_service(user_id)
+        return jsonify(response), status
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "An error occurred",
+            "error": str(e)
+        }), 500

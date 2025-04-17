@@ -196,3 +196,48 @@ def authenticate_user(email=None, phone_number=None, password=None):
 
     logger.info(f"User_id {user.id} authenticated successfully.")
     return True, "Authenticated successfully.", user
+
+
+def get_user_recent_restaurants_service(user_id):
+    """
+    Get a list of recently ordered restaurants for a user (up to 20 unique restaurants)
+    """
+    try:
+        # Query to get the latest purchase date for each restaurant
+        recent_restaurants = db.session.query(
+            Purchase.restaurant_id,
+            func.max(Purchase.purchase_date).label('last_order_date'),
+            Restaurant.restaurantName,
+            Restaurant.image_url
+        ).join(
+            Restaurant,
+            Purchase.restaurant_id == Restaurant.id
+        ).filter(
+            Purchase.user_id == user_id,
+            Purchase.status.in_([PurchaseStatus.COMPLETED, PurchaseStatus.ACCEPTED])
+        ).group_by(
+            Purchase.restaurant_id,
+            Restaurant.restaurantName,
+            Restaurant.image_url
+        ).order_by(
+            desc('last_order_date')
+        ).limit(20).all()
+
+        restaurants = [{
+            "restaurant_id": restaurant.restaurant_id,
+            "restaurant_name": restaurant.restaurantName,
+            "image_url": restaurant.image_url,
+            "last_order_date": restaurant.last_order_date.isoformat()
+        } for restaurant in recent_restaurants]
+
+        return {
+            "success": True,
+            "restaurants": restaurants
+        }, 200
+
+    except Exception as e:
+        return {
+            "success": False,
+            "message": "An error occurred while fetching recent restaurants",
+            "error": str(e)
+        }, 500
