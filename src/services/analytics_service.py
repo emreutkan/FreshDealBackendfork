@@ -1,74 +1,190 @@
-from datetime import datetime
-from sqlalchemy import func, and_
-from src.models import db, Restaurant, Purchase, PurchaseStatus, RestaurantComment
-from decimal import Decimal
+from flask import Blueprint, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from src.models import User, Restaurant
+from src.services.analytics_service import RestaurantAnalyticsService
+from functools import wraps
+
+analytics_bp = Blueprint('analytics', __name__)
 
 
-class RestaurantAnalyticsService:
-    @staticmethod
-    def get_owner_analytics(owner_id):
-        """Get analytics for all restaurants owned by the user"""
-        # Get the start date for current month
-        today = datetime.utcnow()
-        start_date = datetime(today.year, today.month, 1)
-
-        # Get all restaurants owned by the user
-        restaurants = Restaurant.query.filter_by(owner_id=owner_id).all()
-        restaurant_ids = [r.id for r in restaurants]
-
-        if not restaurant_ids:
-            return {
+def owner_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user or user.role != 'owner':
+            return jsonify({
                 "success": False,
-                "message": "No restaurants found for this owner"
-            }, 404
+                "message": "This endpoint is only available for restaurant owners"
+            }), 403
+        return f(*args, **kwargs)
 
-        # Get all completed purchases for the month
-        monthly_purchases = Purchase.query.filter(
-            Purchase.restaurant_id.in_(restaurant_ids),
-            Purchase.status == PurchaseStatus.COMPLETED,
-            Purchase.purchase_date >= start_date
-        ).all()
+    return decorated_function
 
-        # Calculate monthly metrics
-        monthly_products = sum(p.quantity for p in monthly_purchases)
-        monthly_revenue = sum(Decimal(p.total_price) for p in monthly_purchases)
 
-        # Calculate regional distribution from delivery addresses
-        regions = {}
-        for purchase in monthly_purchases:
-            if purchase.delivery_address:
-                # Split address and get district/region
-                parts = purchase.delivery_address.split(',')
-                district = parts[2].strip() if len(parts) > 2 else 'Unknown'
-                regions[district] = regions.get(district, 0) + 1
+@analytics_bp.route('/analytics/dashboard', methods=['GET'])
+@jwt_required()
+@owner_required
+def get_owner_analytics():
+    """
+    Get analytics dashboard data for all restaurants owned by the authenticated user
+    ---
+    tags:
+      - Analytics
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: Analytics dashboard data
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                data:
+                  type: object
+                  properties:
+                    monthly_stats:
+                      type: object
+                      properties:
+                        total_products_sold:
+                          type: integer
+                        total_revenue:
+                          type: string
+                        period:
+                          type: string
+                    regional_distribution:
+                      type: object
+                    restaurant_ratings:
+                      type: object
+                      additionalProperties:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                          average_rating:
+                            type: number
+                          total_ratings:
+                            type: integer
+                          recent_comments:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                user_name:
+                                  type: string
+                                rating:
+                                  type: number
+                                comment:
+                                  type: string
+                                timestamp:
+                                  type: string
+      403:
+        description: User is not a restaurant owner
+      404:
+        description: No restaurants found for this owner
+    """
+    owner_id = get_jwt_identity()
+    response, status_code = RestaurantAnalyticsService.get_owner_analytics(owner_id)
+    return jsonify(response), status_code
 
-        # Get ratings and comments for all owner's restaurants
-        restaurant_stats = {}
-        for restaurant in restaurants:
-            comments = RestaurantComment.query.filter_by(restaurant_id=restaurant.id) \
-                .order_by(RestaurantComment.timestamp.desc()).all()
 
-            restaurant_stats[restaurant.restaurantName] = {
-                "id": restaurant.id,
-                "average_rating": float(restaurant.rating) if restaurant.rating else 0,
-                "total_ratings": restaurant.ratingCount,
-                "recent_comments": [{
-                    "user_name": comment.user.name,
-                    "rating": float(comment.rating),
-                    "comment": comment.comment,
-                    "timestamp": comment.timestamp.isoformat()
-                } for comment in comments[:5]]  # Get 5 most recent comments
-            }
+@analytics_bp.route('/analytics/restaurants/<int:restaurant_id>', methods=['GET'])
+@jwt_required()
+@owner_required
+def get_restaurant_analytics(restaurant_id):
+    """
+    Get analytics dashboard data for a specific restaurant
+    ---
+    tags:
+      - Analytics
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: restaurant_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: ID of the restaurant to get analytics for
+    responses:
+      200:
+        description: Restaurant analytics data
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                data:
+                  type: object
+                  properties:
+                    monthly_stats:
+                      type: object
+                      properties:
+                        total_products_sold:
+                          type: integer
+                        total_revenue:
+                          type: string
+                        period:
+                          type: string
+                    regional_distribution:
+                      type: object
+                    restaurant_stats:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        average_rating:
+                          type: number
+                        total_ratings:
+                          type: integer
+                        recent_comments:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              user_name:
+                                type: string
+                              rating:
+                                type: number
+                              comment:
+                                type: string
+                              timestamp:
+                                type: string
+                              badges:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                                    is_positive:
+                                      type: boolean
+      403:
+        description: User is not a restaurant owner
+      404:
+        description: Restaurant not found
+    """
+    owner_id = get_jwt_identity()
+    restaurant = Restaurant.query.get(restaurant_id)
 
-        return {
-            "success": True,
-            "data": {
-                "monthly_stats": {
-                    "total_products_sold": monthly_products,
-                    "total_revenue": str(monthly_revenue),
-                    "period": f"{today.year}-{today.month:02d}"
-                },
-                "regional_distribution": regions,
-                "restaurant_ratings": restaurant_stats
-            }
-        }, 200
+    if not restaurant:
+        return jsonify({
+            "success": False,
+            "message": f"Restaurant with ID {restaurant_id} not found"
+        }), 404
+
+    if restaurant.owner_id != owner_id:
+        return jsonify({
+            "success": False,
+            "message": "You don't have permission to view this restaurant's analytics"
+        }), 403
+
+    response, status_code = RestaurantAnalyticsService.get_restaurant_analytics(restaurant_id)
+    return jsonify(response), status_code
