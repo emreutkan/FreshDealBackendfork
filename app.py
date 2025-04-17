@@ -78,7 +78,7 @@ def create_app():
             }
         },
         "servers": [
-            {"url": "https://freshdealapi-fkfaajfaffh4c0ex.uksouth-01.azurewebsites.net/",
+            {"url": "https://freshdealbackend.azurewebsites.net/",
              "description": "Production server"},
             {"url": "http://localhost:8000", "description": "Local development server"},
 
