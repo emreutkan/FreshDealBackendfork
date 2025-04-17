@@ -180,7 +180,7 @@ def get_restaurant_analytics(restaurant_id):
             "message": f"Restaurant with ID {restaurant_id} not found"
         }), 404
 
-    if restaurant.owner_id != owner_id:
+    if str(restaurant.owner_id) != str(owner_id):  # Convert both to strings for comparison
         return jsonify({
             "success": False,
             "message": "You don't have permission to view this restaurant's analytics"
