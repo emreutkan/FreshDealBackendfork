@@ -6,7 +6,7 @@ from azure.communication.email import EmailClient
 from dotenv import load_dotenv
 load_dotenv()
 
-SENDER_EMAIL_ADDRESS = "DoNotReply@f8652524-c674-48ac-9648-4d601d0d4c3d.azurecomm.net"
+SENDER_EMAIL_ADDRESS = "DoNotReply@7de60d6f-de4b-4be3-bfaf-197e1239ab35.azurecomm.net"
 
 def send_email(recipient_address, subject, verification_code):
     try:
