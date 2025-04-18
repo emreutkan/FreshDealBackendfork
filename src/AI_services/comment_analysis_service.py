@@ -2,6 +2,7 @@ import os
 import requests
 import json
 import datetime
+import re
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 import logging
@@ -112,13 +113,26 @@ class CommentAnalysisService:
 
         {json.dumps(comment_texts)}
 
+
+        Important guidelines:
+        1. Ignore single letters, meaningless characters
+        2. Only consider substantial feedback that clearly expresses opinions about the restaurant
+        3. Focus on identifying consistent patterns across multiple comments
+        4. A negative aspect should only be included if it appears in multiple comments or is clearly a significant issue
+        5. Don't over-interpret short or ambiguous comments, but comments such as fresh, delicious are acceptable same as bad comments like cold, stale
+        
+        
         Categorize them into:
         1. What general positive aspects customers mentioned about the restaurant/seller
         2. What general negative aspects customers mentioned about the restaurant/seller
 
         Format your response as a JSON object with these keys:
-        - "good_aspects": [list of aspects with examples]
-        - "bad_aspects": [list of aspects with examples]
+        - "good_aspects": [overall whats good about this restaurant in general (small phrases)]
+        - "bad_aspects": [overall whats bad about this restaurant in general (small phrases)]
+        - "reasoning:" [a short explanation of the reasoning behind the analysis]
+
+
+        Return ONLY the JSON object with no additional text.
         """
 
         payload = {
@@ -143,36 +157,20 @@ class CommentAnalysisService:
             # Extract the content safely
             if "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"]
+                print(f"Raw Groq response content:\n{content}")  # <-- ADD THIS LINE
 
-                # Try to parse as JSON, but handle the case where it's not valid JSON
-                try:
-                    analysis_result = json.loads(content)
-                except json.JSONDecodeError:
-                    # If it's not valid JSON, try to extract the information using a simple parser
-                    good_aspects = []
-                    bad_aspects = []
+                # Extract JSON from content (which may be wrapped in markdown code blocks)
+                json_content = self._extract_json_from_markdown(content)
 
-                    # Simple extraction logic for non-JSON formatted response
-                    lines = content.split('\n')
-                    current_section = None
-
-                    for line in lines:
-                        line = line.strip()
-                        if 'good aspects' in line.lower() or 'positive aspects' in line.lower():
-                            current_section = 'good'
-                        elif 'bad aspects' in line.lower() or 'negative aspects' in line.lower():
-                            current_section = 'bad'
-                        elif line.startswith('- ') or line.startswith('* '):
-                            item = line[2:].strip()
-                            if current_section == 'good':
-                                good_aspects.append(item)
-                            elif current_section == 'bad':
-                                bad_aspects.append(item)
-
-                    analysis_result = {
-                        "good_aspects": good_aspects,
-                        "bad_aspects": bad_aspects
-                    }
+                if json_content:
+                    try:
+                        analysis_result = json.loads(json_content)
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, try the backup parser
+                        analysis_result = self._extract_aspects_from_text(content)
+                else:
+                    # If no JSON was found, use the backup parser
+                    analysis_result = self._extract_aspects_from_text(content)
             else:
                 logger.error(f"Unexpected API response format: {result}")
                 analysis_result = {
@@ -215,3 +213,52 @@ class CommentAnalysisService:
                 "restaurant_id": restaurant_id,
                 "restaurant_name": restaurant.restaurantName
             }
+
+    def _extract_json_from_markdown(self, content: str) -> str:
+        """Extract JSON from markdown code blocks"""
+        # Pattern to match JSON code blocks (both with and without language specifier)
+        json_pattern = r"```(?:json)?\s*\n([\s\S]*?)\n\s*```"
+        matches = re.findall(json_pattern, content)
+
+        # Return the first JSON block found
+        if matches:
+            return matches[0].strip()
+        return ""
+
+    def _extract_aspects_from_text(self, content: str) -> Dict[str, List[str]]:
+        """Extract good and bad aspects from text content when JSON parsing fails"""
+        good_aspects = []
+        bad_aspects = []
+
+        lines = content.split('\n')
+        current_section = None
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Detect sections
+            if 'good aspects' in line.lower() or 'positive aspects' in line.lower():
+                current_section = 'good'
+            elif 'bad aspects' in line.lower() or 'negative aspects' in line.lower():
+                current_section = 'bad'
+            # Detect list items
+            elif line.startswith('- ') or line.startswith('* ') or line.startswith('•'):
+                item = re.sub(r'^[-*•]\s+', '', line).strip()
+                if current_section == 'good' and item:
+                    good_aspects.append(item)
+                elif current_section == 'bad' and item:
+                    bad_aspects.append(item)
+            # Detect numbered lists
+            elif re.match(r'^\d+\.', line):
+                item = re.sub(r'^\d+\.\s*', '', line).strip()
+                if current_section == 'good' and item:
+                    good_aspects.append(item)
+                elif current_section == 'bad' and item:
+                    bad_aspects.append(item)
+
+        return {
+            "good_aspects": good_aspects,
+            "bad_aspects": bad_aspects
+        }
