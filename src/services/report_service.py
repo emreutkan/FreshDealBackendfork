@@ -4,7 +4,7 @@ import uuid
 
 from werkzeug.utils import secure_filename
 
-from src.models import db, PurchaseReport, Purchase, Restaurant, Listing
+from src.models import db, PurchaseReport, Purchase
 
 # Define the absolute path for the upload folder (relative to this file's directory)
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))

@@ -1,6 +1,5 @@
 from src.services.notification_service import NotificationService
 from src.models import User, CustomerAddress, Restaurant
-from sqlalchemy import and_
 import math
 from src.models import db
 import logging

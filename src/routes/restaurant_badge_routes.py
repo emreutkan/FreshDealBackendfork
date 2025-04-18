@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-from src.services.restaurant_badge_services import get_restaurant_badges, add_restaurant_badge_point, VALID_BADGES
+from src.services.restaurant_badge_services import get_restaurant_badges, add_restaurant_badge_point, VALID_BADGES, get_restaurant_badge_analytics
 
 restaurant_badge_bp = Blueprint("restaurant_badge", __name__)
 
@@ -85,5 +85,107 @@ def get_badges(restaurant_id):
         return jsonify({
             "success": False,
             "message": "An error occurred while retrieving badges",
+            "error": str(e)
+        }), 500
+
+@restaurant_badge_bp.route("/restaurants/<int:restaurant_id>/badge-analytics", methods=["GET"])
+def get_badge_analytics(restaurant_id):
+    """
+    Get Restaurant Badge Analytics
+    This endpoint retrieves analytics for all badge types for a given restaurant.
+
+    ---
+    summary: Get badge analytics for a restaurant
+    description: >
+      Returns a JSON object containing analytics for all badge categories including
+      the count of positive and negative badges for each category.
+    tags:
+      - Restaurant Badge
+    parameters:
+      - name: restaurant_id
+        in: path
+        type: integer
+        required: true
+        description: Unique identifier of the restaurant
+    responses:
+      200:
+        description: Badge analytics retrieved successfully
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            restaurant_id:
+              type: integer
+              description: The unique ID of the restaurant
+            badge_analytics:
+              type: object
+              properties:
+                freshness:
+                  type: object
+                  properties:
+                    fresh:
+                      type: integer
+                      description: Count of fresh badges
+                    not_fresh:
+                      type: integer
+                      description: Count of not fresh badges
+                delivery:
+                  type: object
+                  properties:
+                    fast_delivery:
+                      type: integer
+                      description: Count of fast delivery badges
+                    slow_delivery:
+                      type: integer
+                      description: Count of slow delivery badges
+                customer_service:
+                  type: object
+                  properties:
+                    customer_friendly:
+                      type: integer
+                      description: Count of customer friendly badges
+                    not_customer_friendly:
+                      type: integer
+                      description: Count of not customer friendly badges
+        examples:
+          application/json:
+            success: true
+            restaurant_id: 1
+            badge_analytics:
+              freshness:
+                fresh: 25
+                not_fresh: 5
+              delivery:
+                fast_delivery: 30
+                slow_delivery: 8
+              customer_service:
+                customer_friendly: 40
+                not_customer_friendly: 3
+      500:
+        description: An error occurred while retrieving badge analytics
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: false
+            message:
+              type: string
+            error:
+              type: string
+    """
+    try:
+        analytics = get_restaurant_badge_analytics(restaurant_id)
+        return jsonify({
+            "success": True,
+            "restaurant_id": restaurant_id,
+            "badge_analytics": analytics
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "An error occurred while retrieving badge analytics",
             "error": str(e)
         }), 500

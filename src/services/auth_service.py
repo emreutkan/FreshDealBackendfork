@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, UTC
 from secrets import token_urlsafe
 
-from flask import url_for, current_app
+from flask import current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 from email_validator import validate_email, EmailNotValidError
 import phonenumbers

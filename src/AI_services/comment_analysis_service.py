@@ -13,6 +13,40 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def get_restaurant_comments(restaurant_id: int) -> List[Dict[str, Any]]:
+    """
+    Fetch comments for a specific restaurant from the last 3 months
+
+    Args:
+        restaurant_id: ID of the restaurant
+
+    Returns:
+        List of comment dictionaries with text and other metadata
+    """
+    # Calculate date 3 months ago
+    current_date = datetime.datetime.now()
+    three_months_ago = current_date - datetime.timedelta(days=90)
+
+    # Query for comments from the last 3 months
+    recent_comments = RestaurantComment.query.filter(
+        RestaurantComment.restaurant_id == restaurant_id,
+        RestaurantComment.timestamp >= three_months_ago
+    ).all()
+
+    # Format comments for analysis
+    comments_data = []
+    for comment in recent_comments:
+        if comment.comment:  # Make sure comment text exists
+            comments_data.append({
+                "text": comment.comment,
+                "rating": float(comment.rating) if comment.rating else None,
+                "timestamp": comment.timestamp.isoformat() if comment.timestamp else None,
+                "user_id": comment.user_id
+            })
+
+    return comments_data
+
+
 class CommentAnalysisService:
     """Service for analyzing restaurant comments using Groq API"""
 
@@ -31,39 +65,6 @@ class CommentAnalysisService:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-
-    def get_restaurant_comments(self, restaurant_id: int) -> List[Dict[str, Any]]:
-        """
-        Fetch comments for a specific restaurant from the last 3 months
-
-        Args:
-            restaurant_id: ID of the restaurant
-
-        Returns:
-            List of comment dictionaries with text and other metadata
-        """
-        # Calculate date 3 months ago
-        current_date = datetime.datetime.now()
-        three_months_ago = current_date - datetime.timedelta(days=90)
-
-        # Query for comments from the last 3 months
-        recent_comments = RestaurantComment.query.filter(
-            RestaurantComment.restaurant_id == restaurant_id,
-            RestaurantComment.timestamp >= three_months_ago
-        ).all()
-
-        # Format comments for analysis
-        comments_data = []
-        for comment in recent_comments:
-            if comment.comment:  # Make sure comment text exists
-                comments_data.append({
-                    "text": comment.comment,
-                    "rating": float(comment.rating) if comment.rating else None,
-                    "timestamp": comment.timestamp.isoformat() if comment.timestamp else None,
-                    "user_id": comment.user_id
-                })
-
-        return comments_data
 
     def analyze_comments(self, restaurant_id: int) -> Dict[str, Any]:
         """
@@ -84,7 +85,7 @@ class CommentAnalysisService:
             }
 
         # Get restaurant comments
-        comments_data = self.get_restaurant_comments(restaurant_id)
+        comments_data = get_restaurant_comments(restaurant_id)
 
         if not comments_data:
             logger.info(f"No comments found for restaurant {restaurant_id} in the last 3 months")

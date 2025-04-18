@@ -2,7 +2,7 @@
 
 import logging
 import coloredlogs
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for
+from flask import Blueprint, request, jsonify, render_template
 from src.services.auth_service import login_user, register_user, verify_email_code, initiate_password_reset, reset_password
 auth_bp = Blueprint("auth", __name__)
 

@@ -5,7 +5,6 @@ from flasgger import swag_from
 from src.services.purchase_service import (
     create_purchase_order_service,
     handle_restaurant_response_service,
-    add_completion_image_service,
     get_restaurant_purchases_service,
     get_user_active_orders_service,
     get_user_previous_orders_service,

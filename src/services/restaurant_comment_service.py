@@ -1,5 +1,5 @@
 from src.models import db, Restaurant, RestaurantComment, Purchase, CommentBadge
-from src.services.restaurant_badge_services import add_restaurant_badge_point, VALID_BADGES, BADGE_PAIRS
+from src.services.restaurant_badge_services import add_restaurant_badge_point, VALID_BADGES
 
 def add_comment_service(restaurant_id, user_id, data):
     restaurant = Restaurant.query.get(restaurant_id)

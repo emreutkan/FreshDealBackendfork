@@ -1,5 +1,5 @@
 from . import db
-from sqlalchemy import Integer, String, DECIMAL, Boolean, CheckConstraint
+from sqlalchemy import Integer, String, DECIMAL, Boolean
 
 class CustomerAddress(db.Model):
     __tablename__ = 'customerAddresses'

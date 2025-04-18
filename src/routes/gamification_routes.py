@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
 from src.services.gamification_services import get_user_rankings, get_single_user_rank
 

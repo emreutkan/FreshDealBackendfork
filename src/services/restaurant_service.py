@@ -131,8 +131,6 @@ def create_restaurant_service(owner_id, form, files, url_for_func):
         from src.services.notification_service import NotificationService
         import logging
 
-        logger = logging.getLogger(__name__)
-
         # Find users with primary addresses
         primary_addresses = db.session.query(CustomerAddress, User).join(
             User,

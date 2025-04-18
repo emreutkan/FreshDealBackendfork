@@ -1,6 +1,5 @@
 from datetime import datetime
-from sqlalchemy import func, and_
-from src.models import db, Restaurant, Purchase, PurchaseStatus, RestaurantComment
+from src.models import Restaurant, Purchase, PurchaseStatus, RestaurantComment
 from decimal import Decimal
 
 

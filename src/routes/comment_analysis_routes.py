@@ -1,7 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from src.AI_services.comment_analysis_service import CommentAnalysisService
-from src.models import User, Restaurant
+from src.models import Restaurant
 import logging
 
 # Configure logging

@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from sqlalchemy import func, and_
 from src.models import db, UserAchievement, Achievement, AchievementType, Purchase, PurchaseStatus
 
 
@@ -63,7 +62,7 @@ class AchievementService:
         db.session.commit()
 
     @staticmethod
-    def check_and_award_achievements(user_id, purchase_id=None):
+    def check_and_award_achievements(user_id):
         """
         Check if the user qualifies for any achievements and award them
         """

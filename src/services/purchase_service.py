@@ -4,8 +4,7 @@ import uuid
 from sqlalchemy import and_
 from werkzeug.utils import secure_filename
 
-from src.models import db, UserCart, Listing, Purchase, Restaurant
-from sqlalchemy.exc import SQLAlchemyError
+from src.models import db, UserCart, Purchase, Restaurant
 
 from src.models.purchase_model import PurchaseStatus
 from src.services.notification_service import NotificationService
@@ -103,7 +102,7 @@ def create_purchase_order_service(user_id, data=None):
         return {"message": "An error occurred", "error": str(e)}, 500
 
 
-def handle_restaurant_response_service(purchase_id, owner_id, action, completion_image=None):
+def handle_restaurant_response_service(purchase_id, owner_id, action):
     """
     Second step: Restaurant accepts or rejects the order.
     The JWT token provides the owner's id rather than the restaurant id.
@@ -414,10 +413,6 @@ def add_completion_image_service(purchase_id, owner_id, file_obj, url_for_func):
 
                 # If achievements were earned, prepare notification data
                 if newly_earned_achievements:
-                    achievement_names = [ach.name for ach in newly_earned_achievements]
-                    achievement_notification = {
-                        "achievements_earned": achievement_names
-                    }
 
                     # Send notification to user for earned achievements
                     try:

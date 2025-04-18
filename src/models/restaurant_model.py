@@ -7,6 +7,26 @@ from sqlalchemy.orm import validates, relationship
 from datetime import datetime, UTC
 
 
+def try_delete_image_file(image_url):
+    """
+    Attempt to delete image file without raising exceptions.
+    Returns (success, message) tuple.
+    """
+    from ..routes.restaurant_routes import UPLOAD_FOLDER
+
+    if not image_url:
+        return True, "No image to delete"
+
+    try:
+        filename = image_url.split('/')[-1]
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            return True, f"Successfully deleted image: {filename}"
+        return True, f"Image file not found: {filename}"
+    except Exception as e:
+        return False, f"Failed to delete image file: {str(e)}"
+
 
 class Restaurant(db.Model):
     __tablename__ = 'restaurants'
@@ -43,7 +63,7 @@ class Restaurant(db.Model):
     purchases = relationship('Purchase', back_populates='restaurant')
 
     @validates('workingDays')
-    def validate_working_days(self, key, working_days):
+    def validate_working_days(self, working_days):
         valid_days = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'}
         days_list = working_days.split(',')
 
@@ -53,7 +73,7 @@ class Restaurant(db.Model):
         return working_days
 
     @validates('workingHoursStart', 'workingHoursEnd')
-    def validate_working_hours(self, key, value):
+    def validate_working_hours(self, value):
         try:
             hours, minutes = map(int, value.split(':'))
             if not (0 <= hours < 24) or not (0 <= minutes < 60):
@@ -64,7 +84,7 @@ class Restaurant(db.Model):
         return value
 
     @validates('rating')
-    def validate_rating(self, key, rating):
+    def validate_rating(self, rating):
         if rating is not None and not (0 <= rating <= 5):
             raise ValueError("Rating must be between 0.00 and 5.00.")
         return rating
@@ -93,26 +113,6 @@ class Restaurant(db.Model):
             self.listings = max(0, self.listings - 1)
         db.session.add(self)
 
-    def try_delete_image_file(self, image_url):
-        """
-        Attempt to delete image file without raising exceptions.
-        Returns (success, message) tuple.
-        """
-        from ..routes.restaurant_routes import UPLOAD_FOLDER
-
-        if not image_url:
-            return True, "No image to delete"
-
-        try:
-            filename = image_url.split('/')[-1]
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            if os.path.exists(filepath):
-                os.remove(filepath)
-                return True, f"Successfully deleted image: {filename}"
-            return True, f"Image file not found: {filename}"
-        except Exception as e:
-            return False, f"Failed to delete image file: {str(e)}"
-
     @classmethod
     def delete_restaurant_service(cls, restaurant_id, owner_id):
         """
@@ -120,7 +120,7 @@ class Restaurant(db.Model):
         """
         from .listing_model import Listing  # Import here to avoid circular imports
 
-        restaurant = cls.query.get(restaurant_id)
+        restaurant = cls.query
         if not restaurant:
             return {"success": False, "message": f"Restaurant with ID {restaurant_id} not found."}, 404
 

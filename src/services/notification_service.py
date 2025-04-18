@@ -2,7 +2,7 @@ import logging
 import requests
 from datetime import datetime, timedelta, UTC
 from typing import List, Dict, Any, Tuple
-from src.models import db, UserDevice, User
+from src.models import db, UserDevice
 
 logger = logging.getLogger(__name__)
 

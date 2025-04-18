@@ -1,5 +1,6 @@
 from src.models import db
 from src.models.restaurant_badge_points_model import RestaurantBadgePoints
+from src.models.comment_badges_model import CommentBadge
 
 VALID_BADGES = [
     'fresh', 'fast_delivery', 'customer_friendly',
@@ -14,6 +15,7 @@ BADGE_PAIRS = {
     'slow_delivery': 'fast_delivery',
     'not_customer_friendly': 'customer_friendly'
 }
+
 
 def add_restaurant_badge_point(restaurant_id, badge_name):
     if badge_name not in VALID_BADGES:
@@ -40,6 +42,7 @@ def add_restaurant_badge_point(restaurant_id, badge_name):
 
     db.session.commit()
 
+
 def get_restaurant_badges(restaurant_id):
     badge_record = RestaurantBadgePoints.query.filter_by(restaurantID=restaurant_id).first()
     if not badge_record:
@@ -59,3 +62,29 @@ def get_restaurant_badges(restaurant_id):
         badges.append('customer_friendly')
 
     return badges
+
+
+def get_restaurant_badge_analytics(restaurant_id):
+    badge_record = RestaurantBadgePoints.query.filter_by(restaurantID=restaurant_id).first()
+
+    if not badge_record:
+        return {
+            "freshness": {"fresh": 0, "not_fresh": 0},
+            "delivery": {"fast_delivery": 0, "slow_delivery": 0},
+            "customer_service": {"customer_friendly": 0, "not_customer_friendly": 0}
+        }
+
+    return {
+        "freshness": {
+            "fresh": badge_record.freshPoint,
+            "not_fresh": badge_record.notFreshPoint
+        },
+        "delivery": {
+            "fast_delivery": badge_record.fastDeliveryPoint,
+            "slow_delivery": badge_record.slowDeliveryPoint
+        },
+        "customer_service": {
+            "customer_friendly": badge_record.customerFriendlyPoint,
+            "not_customer_friendly": badge_record.notCustomerFriendlyPoint
+        }
+    }
