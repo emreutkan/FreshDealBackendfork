@@ -2,8 +2,9 @@
 
 import logging
 import coloredlogs
+from sqlalchemy import func, desc
 from werkzeug.security import check_password_hash, generate_password_hash
-from src.models import db, User, CustomerAddress, UserFavorites
+from src.models import db, User, CustomerAddress, UserFavorites, Purchase, Restaurant, PurchaseStatus
 
 # Configure the logger
 logger = logging.getLogger(__name__)
