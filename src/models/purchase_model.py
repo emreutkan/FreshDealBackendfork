@@ -1,4 +1,4 @@
-from . import db
+from . import db, Listing
 from sqlalchemy import Integer, ForeignKey, DECIMAL, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
