@@ -10,6 +10,7 @@ from src.models.purchase_model import PurchaseStatus
 from src.services.notification_service import NotificationService
 from src.services.achievement_service import AchievementService
 
+
 def create_purchase_order_service(user_id, data=None):
     """
      Creates a pending purchase order
@@ -50,15 +51,14 @@ def create_purchase_order_service(user_id, data=None):
             if price_to_use is None:
                 price_to_use = listing.original_price
 
-
             restaurant = Restaurant.query.get(listing.restaurant_id)
             if not restaurant:
                 return {"message": f"Restaurant (ID: {listing.restaurant_id}) not found"}, 404
 
-            delivery_fee = restaurant.deliveryFee if is_delivery else 1
+            delivery_fee = restaurant.deliveryFee if is_delivery else 0
 
-            # delivery_fee = listing.restaurant.delivery_fee if is_delivery else 1
-            total_price = price_to_use * item.count * delivery_fee
+            # Calculate total price by adding delivery fee instead of multiplying
+            total_price = (price_to_use * item.count) + delivery_fee
 
             try:
                 purchase = Purchase(
@@ -70,7 +70,7 @@ def create_purchase_order_service(user_id, data=None):
                     status=PurchaseStatus.PENDING,
                     is_delivery=is_delivery,
                     delivery_address=delivery_address,
-                    delivery_notes=notes  # Added this line to save the notes
+                    delivery_notes=notes
                 )
             except ValueError as e:
                 db.session.rollback()
@@ -94,7 +94,7 @@ def create_purchase_order_service(user_id, data=None):
         db.session.commit()
         return {
             "message": "Purchase order created successfully, waiting for restaurant approval",
-            "purchases": [p.to_dict() for p in purchases]  # Using new to_dict method
+            "purchases": [p.to_dict() for p in purchases]
         }, 201
 
     except Exception as e:
@@ -192,6 +192,7 @@ def handle_restaurant_response_service(purchase_id, owner_id, action):
         db.session.rollback()
         print(f"[DEBUG] General Exception: {e}")
         return {"message": "An error occurred", "error": str(e)}, 500
+
 
 # In your purchase_service.py
 

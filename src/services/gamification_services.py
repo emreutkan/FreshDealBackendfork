@@ -39,7 +39,7 @@ def get_user_rankings():
                 func.sum(DiscountEarned.discount).label('total_discount')
             ) \
             .join(User, User.id == DiscountEarned.user_id) \
-            .group_by(DiscountEarned.user_id) \
+            .group_by(DiscountEarned.user_id, User.name) \
             .order_by(func.sum(DiscountEarned.discount).desc()) \
             .all()
 
