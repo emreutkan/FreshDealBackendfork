@@ -3,6 +3,7 @@ from src.models import db, Listing
 from datetime import datetime, timedelta, UTC
 from src.utils.cloud_storage import upload_file, delete_file, allowed_file
 
+
 def create_listing_service(restaurant_id, owner_id, form_data, file_obj, url_for_func):
     title = form_data.get("title")
     description = form_data.get("description", "")
@@ -83,8 +84,8 @@ def get_listings_service(restaurant_id, page, per_page, url_for_func):
     listings_data = []
     for listing in listings:
         if listing.image_url:
-            # If the URL is from Firebase Storage, use it directly
-            if "firebasestorage.googleapis.com" in listing.image_url:
+            # Check for both possible Firebase Storage domains
+            if "firebasestorage.googleapis.com" in listing.image_url or "firebasestorage.app" in listing.image_url:
                 image_url = listing.image_url
             else:
                 # Otherwise, assume it's a local file and construct the URL
@@ -153,18 +154,29 @@ def search_service(search_type, query_text, restaurant_id):
             Listing.restaurant_id == restaurant_id,
             Listing.title.ilike(f"%{query_text}%")
         ).all()
-        data = [{
-            "id": listing.id,
-            "restaurant_id": listing.restaurant_id,
-            "title": listing.title,
-            "description": listing.description,
-            "image_url": listing.image_url,
-            "original_price": float(listing.original_price),
-            "count": listing.count,
-            "fresh_score": round(listing.fresh_score, 2),
-            "consume_within": listing.consume_within,
-            "consume_within_type": listing.consume_within_type,
-        } for listing in results]
+
+        data = []
+        for listing in results:
+            image_url = listing.image_url
+            if image_url and not ("firebasestorage.googleapis.com" in image_url or "firebasestorage.app" in image_url):
+                # For local files, construct the URL using the basename
+                filename = os.path.basename(image_url)
+                from flask import url_for
+                image_url = url_for('api_v1.listings.get_uploaded_file', filename=filename, _external=True)
+
+            data.append({
+                "id": listing.id,
+                "restaurant_id": listing.restaurant_id,
+                "title": listing.title,
+                "description": listing.description,
+                "image_url": image_url,
+                "original_price": float(listing.original_price),
+                "count": listing.count,
+                "fresh_score": round(listing.fresh_score, 2),
+                "consume_within": listing.consume_within,
+                "consume_within_type": listing.consume_within_type,
+            })
+
         return {"success": True, "type": "listing", "results": data}, 200
 
     else:
