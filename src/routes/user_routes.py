@@ -679,21 +679,8 @@ def get_recent_restaurants():
                 restaurants:
                   type: array
                   items:
-                    type: object
-                    properties:
-                      restaurant_id:
-                        type: integer
-                        example: 1
-                      restaurant_name:
-                        type: string
-                        example: "Pizza Place"
-                      image_url:
-                        type: string
-                        example: "http://example.com/image.jpg"
-                      last_order_date:
-                        type: string
-                        format: date-time
-                        example: "2025-04-17T23:07:07Z"
+                    type: integer
+                    example: 1
       401:
         description: Authentication required
       500:
