@@ -55,7 +55,7 @@ def get_user_rankings():
         })
         rank += 1
 
-    return jsonify(user_rankings)
+    return user_rankings, 200
 
 def get_single_user_rank(user_id):
     """
@@ -64,7 +64,7 @@ def get_single_user_rank(user_id):
     # Check if the user exists
     user = User.query.filter_by(id=user_id).first()
     if not user:
-        return jsonify({'error': 'User not found'}), 404
+        return {'error': 'User not found'}, 404
 
     # Calculate the user's total discount earned
     user_discount = db.session.query(
@@ -86,9 +86,9 @@ def get_single_user_rank(user_id):
 
     rank = higher_ranked_count + 1
 
-    return jsonify({
+    return {
         'user_id': user_id,
         'user_name': user.name,
         'rank': rank,
         'total_discount': user_discount
-    })
+    }, 200
