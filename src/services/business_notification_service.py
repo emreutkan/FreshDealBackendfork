@@ -3,6 +3,7 @@ from datetime import datetime, UTC
 from typing import Dict, Any
 from src.models import Purchase, Restaurant
 from src.services.notification_service import NotificationService
+from src.services.web_push_notification_service import WebPushNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +33,27 @@ class BusinessNotificationService:
             title = "New Order Received!"
             body = f"New order: {purchase.quantity}x {notification_data['listing_title']}"
 
-            return NotificationService.send_notification_to_user(
+            # Send mobile notification
+            mobile_success = NotificationService.send_notification_to_user(
                 restaurant.owner_id,
                 title,
                 body,
                 notification_data
             )
+
+            # Send web notification
+            web_success = WebPushNotificationService.send_notification_to_user_web(
+                restaurant.owner_id,
+                title,
+                body,
+                notification_data,
+                icon="/static/images/logo.png",
+                tag=f"purchase_{purchase.id}",
+                require_interaction=True
+            )
+
+            # Return True if either method succeeds
+            return mobile_success or web_success
 
         except Exception as e:
             logger.error(f"Error sending business notification for purchase {purchase_id}: {str(e)}")

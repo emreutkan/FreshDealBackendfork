@@ -9,7 +9,7 @@ if not MYSQL_URI:
     raise SystemExit("❌ Missing MYSQL_URI in .env")
 
 engine = create_engine(MYSQL_URI)
-csv_dir = "exported_tables"
+csv_dir = "../exported_tables"
 
 # disable foreign key checks during import
 txt_fk_off = text("SET FOREIGN_KEY_CHECKS=0;")
