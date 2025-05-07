@@ -9,6 +9,7 @@ from src.models import db, UserCart, Purchase, Restaurant, CustomerAddress
 from src.models.purchase_model import PurchaseStatus
 from src.services.notification_service import NotificationService
 from src.services.achievement_service import AchievementService
+from src.services.business_notification_service import BusinessNotificationService
 
 
 def create_purchase_order_service(user_id, data=None):
@@ -98,6 +99,11 @@ def create_purchase_order_service(user_id, data=None):
             db.session.delete(item)
 
         db.session.commit()
+
+        # Send notifications to restaurant owners for each purchase
+        for purchase in purchases:
+            BusinessNotificationService.send_purchase_notification(purchase.id)
+
         return {
             "message": "Purchase order created successfully, waiting for restaurant approval",
             "purchases": [p.to_dict() for p in purchases]
@@ -106,6 +112,8 @@ def create_purchase_order_service(user_id, data=None):
     except Exception as e:
         db.session.rollback()
         return {"message": "An error occurred", "error": str(e)}, 500
+
+
 def handle_restaurant_response_service(purchase_id, owner_id, action):
     """
     Second step: Restaurant accepts or rejects the order.
