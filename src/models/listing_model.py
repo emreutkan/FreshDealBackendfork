@@ -17,8 +17,8 @@ class Listing(db.Model):
     delivery_price = db.Column(DECIMAL(10, 2), nullable=True)
     consume_within = db.Column(Integer, nullable=False)
     consume_within_type = db.Column(String(5), nullable=False, default='HOURS')
-    expires_at = db.Column(DateTime, nullable=False)
-    created_at = db.Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    expires_at = db.Column(DateTime(timezone=True), nullable=False)
+    created_at = db.Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     update_count = db.Column(Integer, nullable=False, default=0)
     fresh_score = db.Column(Float, nullable=False, default=100.0)
     available_for_pickup = db.Column(db.Boolean, nullable=True)
@@ -102,7 +102,7 @@ class Listing(db.Model):
             return False
 
         total_lifetime = (self.expires_at - self.created_at).total_seconds() / 3600
-        decrease_percentage = (6 / total_lifetime) * 100
+        decrease_percentage = (2 / total_lifetime) * 100
 
         self.fresh_score = max(0, self.fresh_score - decrease_percentage)
         self.update_count += 1

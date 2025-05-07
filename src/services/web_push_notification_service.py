@@ -22,7 +22,7 @@ class WebPushNotificationService:
 
             existing_device = UserDevice.query.filter_by(
                 user_id=user_id,
-                push_token=subscription_json
+                web_push_token=subscription_json
             ).first()
 
             if existing_device:
@@ -36,7 +36,8 @@ class WebPushNotificationService:
 
             new_device = UserDevice(
                 user_id=user_id,
-                push_token=subscription_json,
+                push_token=f"web_{user_id}_{datetime.now(UTC).timestamp()}",
+                web_push_token=subscription_json,
                 device_type="web",
                 platform=user_agent or "browser",
                 created_at=datetime.now(UTC),
@@ -134,7 +135,10 @@ class WebPushNotificationService:
 
             for device in web_devices:
                 try:
-                    subscription_info = json.loads(device.push_token)
+                    if device.web_push_token:
+                        subscription_info = json.loads(device.web_push_token)
+                    else:
+                        subscription_info = json.loads(device.push_token)
 
                     success = WebPushNotificationService.send_web_push_notification(
                         subscription_info=subscription_info,
