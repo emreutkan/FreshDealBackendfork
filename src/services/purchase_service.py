@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import and_
 from werkzeug.utils import secure_filename
+from decimal import Decimal
 
 from src.models import db, UserCart, Purchase, Restaurant, CustomerAddress
 
@@ -10,6 +11,7 @@ from src.models.purchase_model import PurchaseStatus
 from src.services.notification_service import NotificationService
 from src.services.achievement_service import AchievementService
 from src.services.business_notification_service import BusinessNotificationService
+from src.services.discount_service import apply_discount
 
 
 def create_purchase_order_service(user_id, data=None):
@@ -101,12 +103,15 @@ def create_purchase_order_service(user_id, data=None):
             purchases.append(purchase)
             cart_items_to_clear.append(item)
 
+        # Apply discount based on total purchase amount
+        total_before_discount, discount_amount, purchases_with_discount = apply_discount(purchases)
+
         for item in cart_items_to_clear:
             db.session.delete(item)
 
         # Increment flash deals count if applicable
         processed_restaurants = set()
-        for purchase in purchases:
+        for purchase in purchases_with_discount:
             if purchase.is_flash_deal and purchase.restaurant_id not in processed_restaurants:
                 restaurant = Restaurant.query.get(purchase.restaurant_id)
                 if restaurant:
@@ -116,13 +121,24 @@ def create_purchase_order_service(user_id, data=None):
         db.session.commit()
 
         # Send notifications to restaurant owners for each purchase
-        for purchase in purchases:
+        for purchase in purchases_with_discount:
             BusinessNotificationService.send_purchase_notification(purchase.id)
 
-        return {
+        # Prepare response with discount information
+        response = {
             "message": "Purchase order created successfully, waiting for restaurant approval",
-            "purchases": [p.to_dict() for p in purchases]
-        }, 201
+            "purchases": [p.to_dict() for p in purchases_with_discount]
+        }
+
+        # Include discount information if a discount was applied
+        if discount_amount > Decimal('0'):
+            response["discount_info"] = {
+                "total_before_discount": str(total_before_discount),
+                "discount_amount": str(discount_amount),
+                "total_after_discount": str(total_before_discount - discount_amount)
+            }
+
+        return response, 201
 
     except Exception as e:
         db.session.rollback()
@@ -437,7 +453,7 @@ def add_completion_image_service(purchase_id, owner_id, file_obj, url_for_func):
             # Check and award achievements
             try:
                 newly_earned_achievements = AchievementService.check_and_award_achievements(purchase.user_id,
-                                                                                         purchase.id)
+                                                                                            purchase.id)
 
                 # If achievements were earned, prepare notification data
                 if newly_earned_achievements:
