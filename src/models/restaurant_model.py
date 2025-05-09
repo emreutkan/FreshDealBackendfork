@@ -5,6 +5,7 @@ from sqlalchemy.orm import validates, relationship
 from datetime import datetime, UTC
 from .restaurant_punishment_model import RestaurantPunishment
 
+
 class Restaurant(db.Model):
     __tablename__ = 'restaurants'
 
@@ -35,6 +36,9 @@ class Restaurant(db.Model):
     maxDeliveryDistance = db.Column(Float, nullable=True)
     deliveryFee = db.Column(DECIMAL(10, 2), nullable=True)
     minOrderAmount = db.Column(DECIMAL(10, 2), nullable=True)
+
+    flash_deals_available = db.Column(Boolean, nullable=False, default=False)
+    flash_deals_count = db.Column(Integer, nullable=False, default=0)
 
     comments = relationship("RestaurantComment", back_populates="restaurant", cascade="all, delete-orphan")
     purchases = relationship('Purchase', back_populates='restaurant')
@@ -71,8 +75,8 @@ class Restaurant(db.Model):
         from decimal import Decimal
         new_rating = Decimal(str(new_rating))
         if self.rating is None:
-                self.rating = new_rating
-                self.ratingCount = 1
+            self.rating = new_rating
+            self.ratingCount = 1
         else:
             total_rating = self.rating * self.ratingCount
             self.ratingCount += 1
@@ -106,11 +110,11 @@ class Restaurant(db.Model):
         punishment = RestaurantPunishment.query.filter(
             RestaurantPunishment.restaurant_id == self.id,
             (
-                (RestaurantPunishment.punishment_type == 'PERMANENT') |
-                (
-                    (RestaurantPunishment.punishment_type == 'TEMPORARY') &
-                    (RestaurantPunishment.end_date > current_time)
-                )
+                    (RestaurantPunishment.punishment_type == 'PERMANENT') |
+                    (
+                            (RestaurantPunishment.punishment_type == 'TEMPORARY') &
+                            (RestaurantPunishment.end_date > current_time)
+                    )
             )
         ).first()
         return punishment is None
@@ -120,6 +124,13 @@ class Restaurant(db.Model):
 
     def can_update_details(self):
         return self.is_active()
+
+    def increment_flash_deals_count(self):
+        self.flash_deals_count += 1
+        if self.flash_deals_count >= 3:
+            self.flash_deals_available = False
+        db.session.add(self)
+        db.session.commit()
 
     @classmethod
     def delete_restaurant_service(cls, restaurant_id, owner_id):

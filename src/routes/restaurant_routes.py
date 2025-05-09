@@ -14,7 +14,7 @@ from src.services.restaurant_service import (
     get_restaurants_service,
     get_restaurant_service,
     delete_restaurant_service,
-    get_restaurants_proximity_service,
+    get_restaurants_proximity_service, update_restaurant_service,
 )
 from src.models import User, RestaurantComment
 from src.utils.cloud_storage import UPLOAD_FOLDER
@@ -895,7 +895,6 @@ def update_restaurant(restaurant_id):
             print(json.dumps({"error_response": error_response, "status": 403}, indent=2))
             return jsonify(error_response), 403
 
-        from src.services.restaurant_service import update_restaurant_service
         response, status = update_restaurant_service(
             restaurant_id,
             owner_id,

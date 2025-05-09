@@ -24,6 +24,7 @@ def create_purchase_order_service(user_id, data=None):
 
         is_delivery = data.get('is_delivery', False) if data else False
         notes = data.get('pickup_notes') if not is_delivery else data.get('delivery_notes')
+        is_flash_deal = data.get('flashdealsactivated', 0) == 1 if data else False
 
         # Get user's primary address or the specified address
         address_id = data.get('address_id')
@@ -53,6 +54,10 @@ def create_purchase_order_service(user_id, data=None):
             if not restaurant:
                 return {"message": f"Restaurant (ID: {listing.restaurant_id}) not found"}, 404
 
+            # Check if flash deal is activated and available
+            if is_flash_deal and not restaurant.flash_deals_available:
+                return {"message": f"Flash deals are not available for restaurant: {restaurant.restaurantName}"}, 400
+
             delivery_fee = restaurant.deliveryFee if is_delivery else 0
             total_price = (price_to_use * item.count) + delivery_fee
 
@@ -74,6 +79,7 @@ def create_purchase_order_service(user_id, data=None):
                     total_price=total_price,
                     status=PurchaseStatus.PENDING,
                     is_delivery=is_delivery,
+                    is_flash_deal=is_flash_deal,
                     address_title=address.title,
                     delivery_address=address_str,
                     delivery_district=address.district,
@@ -97,6 +103,15 @@ def create_purchase_order_service(user_id, data=None):
 
         for item in cart_items_to_clear:
             db.session.delete(item)
+
+        # Increment flash deals count if applicable
+        processed_restaurants = set()
+        for purchase in purchases:
+            if purchase.is_flash_deal and purchase.restaurant_id not in processed_restaurants:
+                restaurant = Restaurant.query.get(purchase.restaurant_id)
+                if restaurant:
+                    restaurant.increment_flash_deals_count()
+                    processed_restaurants.add(purchase.restaurant_id)
 
         db.session.commit()
 
@@ -422,7 +437,7 @@ def add_completion_image_service(purchase_id, owner_id, file_obj, url_for_func):
             # Check and award achievements
             try:
                 newly_earned_achievements = AchievementService.check_and_award_achievements(purchase.user_id,
-                                                                                            purchase.id)
+                                                                                         purchase.id)
 
                 # If achievements were earned, prepare notification data
                 if newly_earned_achievements:
