@@ -17,6 +17,7 @@ from .device import UserDevice
 from .achievement_model import Achievement, UserAchievement, AchievementType
 from .comment_badges_model import CommentBadge
 from .restaurant_punishment_model import RestaurantPunishment, RefundRecord
+from .enviromental_contribution_model import EnvironmentalContribution
 
 __all__ = [
     'db',
@@ -39,4 +40,5 @@ __all__ = [
     'CommentBadge',
     'RestaurantPunishment',
     'RefundRecord',
+    'EnvironmentalContribution',
 ]
