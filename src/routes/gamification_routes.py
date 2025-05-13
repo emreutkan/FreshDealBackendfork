@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
-from src.services.gamification_services import get_user_rankings, get_single_user_rank
+from src.services.gamification_services import get_user_rankings, get_single_user_rank, get_single_user_monthly_rank, \
+    get_monthly_user_rankings
 import json
 import traceback
 import sys
@@ -156,3 +157,64 @@ def get_single_user_rank_route(user_id):
         }
         print(json.dumps({"error_response": error_response}, indent=2))
         return jsonify(error_response), 500
+
+@gamification_bp.route("/user/monthly-rankings", methods=["GET"])
+@jwt_required()
+def get_monthly_user_rankings_route():
+    """
+    Get user rankings based on discounts earned in the last 30 days.
+    ---
+    tags:
+      - Rankings
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: Monthly user rankings fetched successfully.
+      500:
+        description: An error occurred.
+    """
+    try:
+        return get_monthly_user_rankings()
+    except Exception as e:
+        print("An error occurred:", str(e))
+        return jsonify({
+            "success": False,
+            "message": "An error occurred while fetching monthly user rankings",
+            "error": str(e)
+        }), 500
+
+
+@gamification_bp.route("/user/monthly-rank/<int:user_id>", methods=["GET"])
+@jwt_required()
+def get_single_user_monthly_rank_route(user_id):
+    """
+    Get the rank of a specific user based on discounts earned in the last 30 days.
+    ---
+    tags:
+      - Rankings
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+        description: The ID of the user to get the monthly rank for
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: Monthly user rank fetched successfully.
+      404:
+        description: User not found.
+      500:
+        description: An error occurred.
+    """
+    try:
+        return get_single_user_monthly_rank(user_id)
+    except Exception as e:
+        print("An error occurred:", str(e))
+        return jsonify({
+            "success": False,
+            "message": "An error occurred while fetching user's monthly rank",
+            "error": str(e)
+        }), 500
