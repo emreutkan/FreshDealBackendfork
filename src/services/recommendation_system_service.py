@@ -36,6 +36,9 @@ class RecommendationSystemService:
             # Convert to DataFrame
             df = pd.DataFrame(purchase_data)
 
+            if df.empty:
+                return False
+
             # Create user-item matrix
             user_listing_matrix = pd.pivot_table(
                 data=df,
@@ -47,6 +50,9 @@ class RecommendationSystemService:
 
             self.purchase_matrix = user_listing_matrix.values
             self.listing_ids = user_listing_matrix.index.tolist()
+
+            if len(self.listing_ids) == 0:
+                return False
 
             # Create KNN model
             self.model = NearestNeighbors(
@@ -113,14 +119,20 @@ class RecommendationSystemService:
                             "delivery_price": rec_listing.delivery_price
                         })
 
+            # Only return restaurant IDs
+            restaurant_ids = []
+            for rec in recommendations:
+                rec_listing = Listing.query.get(rec["listing_id"])
+                if rec_listing and rec_listing.restaurant_id:
+                    restaurant_ids.append(rec_listing.restaurant_id)
+
+            # Return unique restaurant IDs
+            restaurant_ids = list(set(restaurant_ids))
+
             return {
                 "success": True,
                 "data": {
-                    "listing": {
-                        "id": listing.id,
-                        "title": listing.title
-                    },
-                    "recommendations": recommendations
+                    "restaurant_ids": restaurant_ids
                 }
             }, 200
 
