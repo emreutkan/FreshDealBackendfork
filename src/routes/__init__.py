@@ -17,8 +17,7 @@ from src.routes.achievement_routes import achievement_bp
 from src.routes.restaurant_badge_routes import restaurant_badge_bp
 from src.routes.comment_analysis_routes import comment_analysis_bp
 from src.routes.restaurant_punishment_routes import restaurant_punishment_bp
-from src.routes.rec_routes import recommendation_bp
-from src.routes.restaurant_rec_routes import restaurant_recommendation_bp
+from src.routes.recommendation_system_routes import recommendation_bp
 from src.routes.web_push_notification_routes import web_push_bp
 from src.routes.flash_deals_routes import flash_deals_bp
 from src.routes.environmental_routes import environmental_bp
@@ -43,7 +42,6 @@ def init_app(app):
     api_v1.register_blueprint(comment_analysis_bp)
     api_v1.register_blueprint(restaurant_punishment_bp)
     api_v1.register_blueprint(recommendation_bp)
-    api_v1.register_blueprint(restaurant_recommendation_bp)
     api_v1.register_blueprint(web_push_bp)
     api_v1.register_blueprint(flash_deals_bp)
     api_v1.register_blueprint(environmental_bp)
