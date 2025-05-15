@@ -22,8 +22,20 @@ class TestGamificationService(unittest.TestCase):
 
         self.test_datetime = datetime(2025, 5, 15, 11, 32, 25, tzinfo=UTC)
 
-        self.user1 = User(id=1, name="Test User 1", email="test1@test.com")
-        self.user2 = User(id=2, name="Test User 2", email="test2@test.com")
+        self.user1 = User(
+            id=1,
+            name="Test User 1",
+            email="test1@test.com",
+            phone_number="+901234567890",
+            role="customer"
+        )
+        self.user2 = User(
+            id=2,
+            name="Test User 2",
+            email="test2@test.com",
+            phone_number="+901234567891",
+            role="customer"
+        )
         db.session.add_all([self.user1, self.user2])
         db.session.commit()
 
