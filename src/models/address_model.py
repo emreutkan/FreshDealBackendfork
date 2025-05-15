@@ -2,7 +2,7 @@ from . import db
 from sqlalchemy import Integer, String, DECIMAL, Boolean, CheckConstraint
 
 class CustomerAddress(db.Model):
-    __tablename__ = 'customerAddresses'
+    __tablename__ = 'customeraddresses'
     id = db.Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     user_id = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
     title = db.Column(String(80), nullable=False)

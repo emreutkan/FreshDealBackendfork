@@ -33,7 +33,7 @@ conn_str = (
 )
 
 # Create output folder
-output_dir = "../exported_tables"
+output_dir = "../exported_json"
 os.makedirs(output_dir, exist_ok=True)
 
 # Connect and export tables

@@ -9,11 +9,12 @@ if not MYSQL_URI:
     raise SystemExit("❌ Missing MYSQL_URI in .env")
 
 engine = create_engine(MYSQL_URI)
-csv_dir = "../exported_tables"
+csv_dir = "../exported_json"
 
 # disable foreign key checks during import
 txt_fk_off = text("SET FOREIGN_KEY_CHECKS=0;")
 txt_fk_on = text("SET FOREIGN_KEY_CHECKS=1;")
+
 
 # helper to clear tables before import
 def clear_table(name, conn):
@@ -22,6 +23,7 @@ def clear_table(name, conn):
         print(f"🧹 Cleared table: {name}")
     except Exception:
         pass
+
 
 # disable FK checks and clear dependent tables
 with engine.begin() as conn:
@@ -48,8 +50,8 @@ ordered_files = [
     "user_devices.csv",
     "user_favorites.csv",
     "comment_badges.csv",
-    "customerAddresses.csv",
-    "discountEarned.csv",
+    "customeraddresses.csv",
+    "discountearned.csv",
     "user_cart.csv"
 ]
 
@@ -71,6 +73,18 @@ for file in ordered_files:
     dtype_overrides = None
     if table_name == "restaurant_comments":
         dtype_overrides = {"timestamp": SQLDateTime()}
+
+    # Add missing columns for restaurants table
+    if table_name == "restaurants":
+        if "flash_deals_available" not in df.columns:
+            df["flash_deals_available"] = False
+        if "flash_deals_count" not in df.columns:
+            df["flash_deals_count"] = 0
+
+    # Add missing columns for purchases table
+    if table_name == "purchases":
+        if "is_flash_deal" not in df.columns:
+            df["is_flash_deal"] = False
 
     # clear existing rows
     with engine.begin() as conn:
