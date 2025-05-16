@@ -14,7 +14,7 @@ class User(db.Model):
     achievements = relationship('UserAchievement', back_populates='user')
 
     __table_args__ = (
-        CheckConstraint("role IN ('customer', 'owner')", name='role_check'),
+        CheckConstraint("role IN ('customer', 'owner', 'support')", name='role_check'),
     )
 
     # Relationships
