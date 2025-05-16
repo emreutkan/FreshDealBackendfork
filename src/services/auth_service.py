@@ -148,7 +148,7 @@ def register_user(data):
     logger.info(f"Registration attempt for email: {email}, phone_number: {phone_number}, role: {role}")
 
     # Input validation
-    if role not in ["customer", "owner"]:
+    if role not in ["customer", "owner", "support"]:
         logger.info(f"Invalid role: {role}")
         return {"success": False, "message": "Invalid role"}, 400
 
