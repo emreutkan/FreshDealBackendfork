@@ -21,6 +21,7 @@ from src.routes.recommendation_system_routes import recommendation_bp
 from src.routes.web_push_notification_routes import web_push_bp
 from src.routes.flash_deals_routes import flash_deals_bp
 from src.routes.environmental_routes import environmental_bp
+from src.routes.ticket_routes import ticket_bp
 
 def init_app(app):
     api_v1 = Blueprint('api_v1', __name__, url_prefix='/v1')
@@ -45,4 +46,5 @@ def init_app(app):
     api_v1.register_blueprint(web_push_bp)
     api_v1.register_blueprint(flash_deals_bp)
     api_v1.register_blueprint(environmental_bp)
+    api_v1.register_blueprint(ticket_bp)
     app.register_blueprint(api_v1)
