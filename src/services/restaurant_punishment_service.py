@@ -1,5 +1,7 @@
 from datetime import datetime, timezone, timedelta
-from src.models import db
+from typing import Any
+
+from src.models import db, User
 from src.models.restaurant_model import Restaurant
 from src.models.restaurant_punishment_model import RestaurantPunishment, RefundRecord
 from src.models.purchase_model import Purchase
@@ -185,7 +187,8 @@ class RestaurantPunishmentService:
             return {"success": False, "message": str(e)}, 500
 
     @staticmethod
-    def check_restaurant_status(restaurant_id: int) -> dict:
+    def check_restaurant_status(restaurant_id: int) -> tuple[dict[str, str | bool], int] | tuple[
+        dict[str, bool | None | dict[str, Any | None] | Any], int]:
         restaurant = Restaurant.query.get(restaurant_id)
         if not restaurant:
             return {"success": False, "message": "Restaurant not found"}, 404
@@ -215,6 +218,7 @@ class RestaurantPunishmentService:
             "is_active": is_active,
             "punishment": punishment_details
         }, 200
+
 
     @staticmethod
     def get_punishment_history(restaurant_id: int) -> tuple:
