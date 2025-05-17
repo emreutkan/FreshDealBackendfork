@@ -79,7 +79,6 @@ def get_all_tickets():
             "headers": dict(request.headers),
             "args": dict(request.args),
             "timestamp": current_time,
-            "user": "emreutkan"  # Using the provided username
         }
         print(json.dumps({"request": request_log}, indent=2))
 
@@ -240,7 +239,6 @@ def search_tickets():
             "headers": dict(request.headers),
             "args": dict(request.args),
             "timestamp": current_time,
-            "user": "emreutkan"  # Using the provided username
         }
         print(json.dumps({"request": request_log}, indent=2))
 
@@ -393,14 +391,12 @@ def search_tickets():
 })
 def disregard_ticket(ticket_id):
     try:
-        current_time = "2025-05-16 23:31:17"  # Updated timestamp
         request_log = {
             "endpoint": request.path,
             "method": request.method,
             "headers": dict(request.headers),
             "ticket_id": ticket_id,
-            "timestamp": current_time,
-            "user": "emreutkan"  # Using the provided username
+            "timestamp": datetime.now(),
         }
         print(json.dumps({"request": request_log}, indent=2))
 
@@ -411,7 +407,7 @@ def disregard_ticket(ticket_id):
             error_response = {
                 "success": False,
                 "message": "Only support team members can disregard tickets",
-                "timestamp": current_time
+                "timestamp": datetime.now()
             }
             print(json.dumps({"error_response": error_response, "status": 403}, indent=2))
             return jsonify(error_response), 403
@@ -422,7 +418,7 @@ def disregard_ticket(ticket_id):
             error_response = {
                 "success": False,
                 "message": "Ticket not found",
-                "timestamp": current_time
+                "timestamp": datetime.now(),
             }
             print(json.dumps({"error_response": error_response, "status": 404}, indent=2))
             return jsonify(error_response), 404
@@ -437,7 +433,7 @@ def disregard_ticket(ticket_id):
         response = {
             "success": True,
             "message": "Ticket disregarded successfully",
-            "timestamp": current_time
+            "timestamp": datetime.now()
         }
 
         print(json.dumps({"response": response, "status": 200}, indent=2))
@@ -451,7 +447,6 @@ def disregard_ticket(ticket_id):
             "success": False,
             "message": "An error occurred while disregarding ticket",
             "error": str(e),
-            "timestamp": "2025-05-16 23:31:17"  # Updated timestamp
         }
         print(json.dumps({"error_response": error_response, "status": 500}, indent=2))
         return jsonify(error_response), 500

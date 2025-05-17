@@ -8,12 +8,12 @@ import hashlib
 
 def generate_sample_data():
     # Check if data already exists
-    if os.path.exists('..exported_json/users.json') and os.path.exists('..exported_json/restaurants.json'):
+    if os.path.exists('../exported_json/users.json') and os.path.exists('../exported_json/restaurants.json'):
         print("Sample data already loaded.")
         return
 
     # Create export directory if it doesn't exist
-    os.makedirs('exported_json', exist_ok=True)
+    os.makedirs('../exported_json', exist_ok=True)
 
     # Set random seed for reproducibility
     random.seed(42)
@@ -50,6 +50,21 @@ def generate_sample_data():
             "reset_token_expires": None
         }
         users.append(customer)
+
+    # Create 3 support team members
+    for i in range(3):
+        support = {
+            "id": i + 31,
+            "name": f"{random.choice(['Support', 'Admin', 'Helper'])} {i + 1}",
+            "email": f"support{i + 1}@example.com",
+            "phone_number": f"+9053{random.randint(10000000, 99999999)}",
+            "password": "scrypt:32768:8:1$1SpMr9j8zZCp6vfr$c436c2aa43572b5b17c63e342636eaf0e64050ed3c30e51e1343b11abaf65dcc2d26e0c0f4dd6570ee4a7707064bd93aeb95c98ee459583aacfc491c866f121f",
+            "role": "support",
+            "email_verified": True,
+            "reset_token": None,
+            "reset_token_expires": None
+        }
+        users.append(support)
 
     # Generate customer addresses
     addresses = []
@@ -713,15 +728,44 @@ def generate_sample_data():
             user_devices.append(user_device)
             device_id += 1
 
-    # Generate restaurant punishments
+    # Generate restaurant punishments with the new fields
     restaurant_punishments = []
     punishment_id = 1
+    punishment_types = ["PERMANENT", "TEMPORARY", "TEMPORARY"]  # weighted towards TEMPORARY
+    support_user_ids = [user["id"] for user in users if user["role"] == "support"]
 
     for restaurant in restaurants:
         # 10% chance of a restaurant having a punishment
         if random.random() < 0.1:
+            punishment_type = random.choice(punishment_types)
             punishment_start = datetime.now(UTC) - timedelta(days=random.randint(1, 10))
-            punishment_end = punishment_start + timedelta(days=random.randint(1, 5))
+            support_user_id = random.choice(support_user_ids)
+
+            # For temporary punishments, set end date
+            if punishment_type == "TEMPORARY":
+                duration_days = random.choice([3, 7, 14, 30])
+                punishment_end = punishment_start + timedelta(days=duration_days)
+            else:
+                duration_days = None
+                punishment_end = None
+
+            # 20% chance the punishment is reverted
+            is_reverted = random.random() < 0.2
+            is_active = not is_reverted
+
+            reverted_at = None
+            reverted_by = None
+            reversion_reason = None
+
+            if is_reverted:
+                reverted_at = punishment_start + timedelta(days=random.randint(1, 3))
+                reverted_by = random.choice(support_user_ids)
+                reversion_reason = random.choice([
+                    "Punishment was issued by mistake",
+                    "Issue resolved with restaurant",
+                    "Restaurant appealed successfully",
+                    "Investigation completed, punishment no longer needed"
+                ])
 
             punishment = {
                 "id": punishment_id,
@@ -733,12 +777,73 @@ def generate_sample_data():
                     "Hygiene concerns",
                     "Multiple cancellations"
                 ]),
+                "punishment_type": punishment_type,
+                "duration_days": duration_days,
                 "start_date": punishment_start.strftime("%Y-%m-%d %H:%M:%S"),
-                "end_date": punishment_end.strftime("%Y-%m-%d %H:%M:%S"),
-                "active": punishment_end > datetime.now(UTC)
+                "end_date": punishment_end.strftime("%Y-%m-%d %H:%M:%S") if punishment_end else None,
+                "created_by": support_user_id,
+                "created_at": punishment_start.strftime("%Y-%m-%d %H:%M:%S"),
+                "is_active": is_active,
+                "is_reverted": is_reverted,
+                "reverted_by": reverted_by,
+                "reverted_at": reverted_at.strftime("%Y-%m-%d %H:%M:%S") if reverted_at else None,
+                "reversion_reason": reversion_reason
             }
             restaurant_punishments.append(punishment)
             punishment_id += 1
+
+    # Generate purchase reports with status
+    purchase_reports = []
+    report_id = 1
+
+    # For each 10th completed purchase, generate a report
+    for purchase in [p for p in purchases if p["status"] == "COMPLETED"]:
+        if random.random() < 0.1:  # 10% chance of having a report
+            report_status = random.choice(["active", "resolved", "inactive"])
+            reported_at = datetime.strptime(purchase["purchase_date"], "%Y-%m-%d %H:%M:%S") + timedelta(
+                days=random.randint(1, 3))
+
+            resolved_at = None
+            resolved_by = None
+            punishment_id = None
+
+            if report_status != "active":
+                resolved_at = reported_at + timedelta(days=random.randint(1, 5))
+                resolved_by = random.choice(support_user_ids)
+
+                # If resolved and 30% chance, link it to a punishment
+                if report_status == "resolved" and random.random() < 0.3:
+                    # Find punishments for this restaurant
+                    restaurant_id = purchase["restaurant_id"]
+                    restaurant_punishments_list = [p for p in restaurant_punishments if
+                                                   p["restaurant_id"] == restaurant_id]
+                    if restaurant_punishments_list:
+                        punishment_id = random.choice(restaurant_punishments_list)["id"]
+
+            report = {
+                "id": report_id,
+                "user_id": purchase["user_id"],
+                "purchase_id": purchase["id"],
+                "restaurant_id": purchase["restaurant_id"],
+                "listing_id": purchase["listing_id"],
+                "image_url": f"https://example.com/images/reports/{report_id}.jpg",
+                "description": random.choice([
+                    "The food was cold when it arrived",
+                    "The order was incomplete",
+                    "The quality was not as described",
+                    "Very long delivery time",
+                    "Wrong items in the order",
+                    "Food seemed spoiled",
+                    "Portion size was much smaller than expected"
+                ]),
+                "status": report_status,
+                "reported_at": reported_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "resolved_at": resolved_at.strftime("%Y-%m-%d %H:%M:%S") if resolved_at else None,
+                "resolved_by": resolved_by,
+                "punishment_id": punishment_id
+            }
+            purchase_reports.append(report)
+            report_id += 1
 
     # Generate refund records
     refund_records = []
@@ -752,7 +857,9 @@ def generate_sample_data():
 
             refund = {
                 "id": refund_id,
-                "purchase_id": purchase["id"],
+                "restaurant_id": purchase["restaurant_id"],
+                "user_id": purchase["user_id"],
+                "order_id": purchase["id"],
                 "amount": purchase["total_price"],
                 "reason": random.choice([
                     "Food quality issues",
@@ -761,7 +868,9 @@ def generate_sample_data():
                     "Customer complaint",
                     "Restaurant request"
                 ]),
-                "processed_at": refund_date.strftime("%Y-%m-%d %H:%M:%S")
+                "processed": True,
+                "created_by": random.choice(support_user_ids),
+                "created_at": refund_date.strftime("%Y-%m-%d %H:%M:%S")
             }
             refund_records.append(refund)
             refund_id += 1
@@ -963,7 +1072,7 @@ def generate_sample_data():
 
     # Save data to JSON files
     def save_to_json(data, filename):
-        with open(f"..exported_json/{filename}", 'w', encoding='utf-8') as f:
+        with open(f"../exported_json/{filename}", 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     # Save files with names matching the database table names from the image
@@ -994,10 +1103,11 @@ def generate_sample_data():
     save_to_json(user_notifications, 'user_notifications.json')  # New
     save_to_json(payment_methods, 'payment_methods.json')  # New
     save_to_json(payments, 'payments.json')  # New
+    save_to_json(purchase_reports, 'purchase_reports.json')  # New
 
-    print("Sample data has been generated and saved to JSON files in ..exported_json/ directory:")
+    print("Sample data has been generated and saved to JSON files in ../exported_json/ directory:")
     print(
-        f"- {len(users)} users ({len([u for u in users if u['role'] == 'owner'])} owners, {len([u for u in users if u['role'] == 'customer'])} customers)")
+        f"- {len(users)} users ({len([u for u in users if u['role'] == 'owner'])} owners, {len([u for u in users if u['role'] == 'customer'])} customers, {len([u for u in users if u['role'] == 'support'])} support team members)")
     print(f"- {len(addresses)} customer addresses")
     print(f"- {len(restaurants)} restaurants")
     print(f"- {len(restaurant_badge_points)} restaurant badge points records")
@@ -1018,6 +1128,7 @@ def generate_sample_data():
     print(f"- {len(user_devices)} user devices")
     print(f"- {len(restaurant_punishments)} restaurant punishments")
     print(f"- {len(refund_records)} refund records")
+    print(f"- {len(purchase_reports)} purchase reports")
     print(f"- {len(user_cart_items)} user cart items")
     print(f"- {len(discounts_earned)} discounts earned")
     print(f"- {len(notification_settings)} notification settings")

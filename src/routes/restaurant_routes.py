@@ -14,7 +14,7 @@ from src.services.restaurant_service import (
     get_restaurants_service,
     get_restaurant_service,
     delete_restaurant_service,
-    get_restaurants_proximity_service, update_restaurant_service,
+    get_restaurants_in_proximity, update_restaurant_service,
 )
 from src.models import User, RestaurantComment
 from src.utils.cloud_storage import UPLOAD_FOLDER
@@ -449,7 +449,7 @@ def get_restaurants_proximity():
         user_lat = data.get('latitude')
         user_lon = data.get('longitude')
         radius = data.get('radius', 10)
-        response, status = get_restaurants_proximity_service(user_lat, user_lon, radius)
+        response, status = get_restaurants_in_proximity(user_lat, user_lon, radius)
 
         print(json.dumps({"response": response, "status": status}, indent=2))
         return jsonify(response), status

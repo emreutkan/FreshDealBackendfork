@@ -219,26 +219,52 @@ def get_restaurant_service(restaurant_id):
     return restaurant_data, 200
 
 
-def get_restaurants_proximity_service(user_lat, user_lon, radius=10):
+def haversine(lon1, lat1, lon2, lat2):
     """
-    Retrieve restaurants based on proximity.
+    Calculate the great circle distance in kilometers between two points
+    on the earth (specified in decimal degrees)
     """
+    # Convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+
+    # Haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    c = 2 * asin(sqrt(a))
+    r = 6371  # Radius of earth in kilometers
+    return c * r
+
+
+
+def haversine(lat1, lon1, lat2, lon2):
+    # Convert degrees to radians
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    d_lat = lat2 - lat1
+    d_lon = lon2 - lon1
+    a = sin(d_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(d_lon / 2) ** 2
+    c = 2 * asin(sqrt(a))
+    earth_radius = 6371  # km
+    return c * earth_radius
+
+def get_restaurants_in_proximity(user_lat, user_lon, radius=10, filters=None):
+    """
+    Get restaurants within a specified radius of a given coordinate.
+    Only returns active restaurants (not under punishment).
+
+    :param user_lon: User's longitude
+    :param user_lat: User's latitude
+    :param radius: Search radius in kilometers, defaults to 10
+    :param filters: Additional filters like category, rating, etc.
+    :return: Tuple (restaurants list, HTTP status code)
+    """
+
     try:
         user_lat = float(user_lat)
         user_lon = float(user_lon)
         radius = float(radius)
     except ValueError:
         return {"success": False, "message": "Invalid latitude, longitude, or radius format"}, 400
-
-    def haversine(lat1, lon1, lat2, lon2):
-        # Convert degrees to radians
-        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-        d_lat = lat2 - lat1
-        d_lon = lon2 - lon1
-        a = sin(d_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(d_lon / 2) ** 2
-        c = 2 * asin(sqrt(a))
-        earth_radius = 6371  # km
-        return c * earth_radius
 
     restaurants = Restaurant.query.all()
     nearby = []

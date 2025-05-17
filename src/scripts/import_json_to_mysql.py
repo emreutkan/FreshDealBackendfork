@@ -10,7 +10,7 @@ if not MYSQL_URI:
     raise SystemExit("❌ Missing MYSQL_URI in .env")
 
 engine = create_engine(MYSQL_URI)
-json_dir = "exported_json"
+json_dir = "../../src/exported_json"  # Adjust the path as needed
 
 # disable foreign key checks during import
 txt_fk_off = text("SET FOREIGN_KEY_CHECKS=0;")
@@ -30,7 +30,8 @@ with engine.begin() as conn:
 table_name_mapping = {
     "customeraddresses.json": "customeraddresses",
     "discountearned.json": "discountearned",
-    "user_cart.json": "user_cart"
+    "user_cart.json": "user_cart",
+    "purchase_reports.json": "purchase_reports"  # Add mapping for purchase reports
 }
 
 # Files to import, only including those matching existing tables
@@ -51,7 +52,8 @@ ordered_files = [
     "restaurant_punishments.json",
     "refund_records.json",
     "user_cart.json",
-    "discountearned.json"
+    "discountearned.json",
+    "purchase_reports.json"  # Add purchase reports to files to import
 ]
 
 
@@ -91,9 +93,22 @@ def process_restaurant_punishments(df):
         result = conn.execute(text("DESCRIBE restaurant_punishments"))
         columns = {row[0]: row for row in result}
 
-        # Add missing required columns with default values
+        # Print columns to debug
+        print(f"Restaurant Punishments Table Columns: {list(columns.keys())}")
+
+        # Check if the new columns exist in the DB schema
+        has_is_active = 'is_active' in columns
+        has_is_reverted = 'is_reverted' in columns
+        has_reverted_by = 'reverted_by' in columns
+        has_reverted_at = 'reverted_at' in columns
+        has_reversion_reason = 'reversion_reason' in columns
+
+        print(f"is_active column exists: {has_is_active}")
+        print(f"is_reverted column exists: {has_is_reverted}")
+
+        # Add missing columns if they exist in the table but not in our data
         if 'punishment_type' in columns and 'punishment_type' not in df.columns:
-            df['punishment_type'] = 'OTHER'  # Default punishment type
+            df['punishment_type'] = 'TEMPORARY'  # Default punishment type
 
         if 'duration_days' in columns and 'duration_days' not in df.columns:
             # Calculate duration from start and end dates
@@ -103,13 +118,34 @@ def process_restaurant_punishments(df):
                 df['duration_days'] = df['duration_days'].dt.total_seconds() / (24 * 3600)
                 df['duration_days'] = df['duration_days'].astype(int)
             else:
-                df['duration_days'] = 1  # Default duration
+                df['duration_days'] = 7  # Default duration
 
         if 'created_by' in columns and 'created_by' not in df.columns:
-            df['created_by'] = 1  # Default admin user
+            df['created_by'] = 31  # Default support team user
 
         if 'created_at' in columns and 'created_at' not in df.columns:
-            df['created_at'] = pd.Timestamp.now()
+            df['created_at'] = df['start_date'] if 'start_date' in df.columns else pd.Timestamp.now()
+
+        # Handle the new columns if they exist in the schema
+        if has_is_active and 'is_active' not in df.columns:
+            # Check if there's an 'active' column we can use
+            if 'active' in df.columns:
+                df['is_active'] = df['active']
+            else:
+                # Default to active if end_date is in the future
+                df['is_active'] = True
+
+        if has_is_reverted and 'is_reverted' not in df.columns:
+            df['is_reverted'] = False  # Default to not reverted
+
+        if has_reverted_by and 'reverted_by' not in df.columns:
+            df['reverted_by'] = None  # No one reverted it
+
+        if has_reverted_at and 'reverted_at' not in df.columns:
+            df['reverted_at'] = None  # No reversion time
+
+        if has_reversion_reason and 'reversion_reason' not in df.columns:
+            df['reversion_reason'] = None  # No reversion reason
 
     return df
 
@@ -153,7 +189,7 @@ def process_refund_records(df):
             df['processed'] = True
 
         if 'created_by' in columns and 'created_by' not in df.columns:
-            df['created_by'] = 1
+            df['created_by'] = 31  # Default support team user
 
         if 'created_at' in columns and 'created_at' not in df.columns:
             if 'processed_at' in df.columns:
@@ -164,11 +200,70 @@ def process_refund_records(df):
     return df
 
 
+def process_purchase_reports(df):
+    # Add required columns with default values
+    with engine.connect() as conn:
+        result = conn.execute(text("DESCRIBE purchase_reports"))
+        columns = {row[0]: row for row in result}
+
+        print(f"Purchase Reports Table Columns: {list(columns.keys())}")
+
+        # Check if status column exists in the DB schema
+        has_status = 'status' in columns
+        print(f"status column exists: {has_status}")
+
+        if has_status and 'status' in df.columns:
+            # Check the type of the status column
+            status_column_info = columns['status']
+            column_type = status_column_info[1]
+
+            print(f"Status column type: {column_type}")
+
+            # If it's an ENUM, extract the allowed values
+            if 'enum' in column_type.lower():
+                enum_values = column_type.split("'")[1::2]  # Extract values between quotes
+                print(f"Valid status values: {enum_values}")
+
+                # Make sure our values match the enum values
+                if set(df['status'].unique()) != set(enum_values):
+                    # Map our values to the enum values if possible
+                    if 'active' in enum_values and 'resolved' in enum_values and 'inactive' in enum_values:
+                        df['status'] = df['status'].apply(lambda x: x.upper() if x in enum_values else 'ACTIVE')
+                    else:
+                        # If our values don't match and we can't find a mapping, set a default
+                        df['status'] = enum_values[0] if enum_values else 'ACTIVE'
+
+        # Add other required fields with defaults if missing
+        if 'resolved_at' in columns and 'resolved_at' not in df.columns and 'status' in df.columns:
+            # Set resolved_at based on status
+            df['resolved_at'] = None
+            if 'status' in df.columns:
+                resolved_mask = df['status'].isin(['resolved', 'RESOLVED', 'inactive', 'INACTIVE'])
+                if resolved_mask.any():
+                    # For resolved reports, set a resolved time if missing
+                    df.loc[resolved_mask, 'resolved_at'] = pd.Timestamp.now()
+
+        if 'resolved_by' in columns and 'resolved_by' not in df.columns and 'status' in df.columns:
+            # Set resolved_by based on status
+            df['resolved_by'] = None
+            if 'status' in df.columns:
+                resolved_mask = df['status'].isin(['resolved', 'RESOLVED', 'inactive', 'INACTIVE'])
+                if resolved_mask.any():
+                    # For resolved reports, set a resolver if missing
+                    df.loc[resolved_mask, 'resolved_by'] = 31  # Default support user
+
+        if 'punishment_id' in columns and 'punishment_id' not in df.columns:
+            df['punishment_id'] = None  # No punishment by default
+
+    return df
+
+
 # Table-specific processors
 table_processors = {
     'achievements': process_achievements,
     'restaurant_punishments': process_restaurant_punishments,
-    'refund_records': process_refund_records
+    'refund_records': process_refund_records,
+    'purchase_reports': process_purchase_reports
 }
 
 # Process each file in order, but only if the corresponding table exists

@@ -1,7 +1,14 @@
 # models/purchase_report.py
 from src.models import db
-from sqlalchemy import Integer, ForeignKey, String, DateTime, func
+from sqlalchemy import Integer, ForeignKey, String, DateTime, func, Enum
 from sqlalchemy.orm import relationship
+import enum
+
+
+class ReportStatus(enum.Enum):
+    ACTIVE = "active"
+    RESOLVED = "resolved"
+    INACTIVE = "inactive"
 
 
 class PurchaseReport(db.Model):
@@ -25,11 +32,25 @@ class PurchaseReport(db.Model):
     # A brief text explaining the reason for the report
     description = db.Column(String(1000), nullable=False)
 
+    # Status of the report
+    status = db.Column(Enum(ReportStatus), default=ReportStatus.ACTIVE, nullable=False)
+
     # Timestamp for when the report was created
     reported_at = db.Column(DateTime, nullable=False, default=func.now())
 
+    # Timestamp for when the report was resolved
+    resolved_at = db.Column(DateTime, nullable=True)
+
+    # Support user who resolved the report
+    resolved_by = db.Column(Integer, ForeignKey('users.id'), nullable=True)
+
+    # Relationship to punishment (one report can have one punishment)
+    punishment_id = db.Column(Integer, ForeignKey('restaurant_punishments.id'), nullable=True)
+    punishment = relationship('RestaurantPunishment', backref='report')
+
     # Relationships
-    user = relationship('User', backref='purchase_reports')
+    user = relationship('User', foreign_keys=[user_id], backref='purchase_reports')
+    resolver = relationship('User', foreign_keys=[resolved_by], backref='resolved_reports')
     purchase = relationship('Purchase', backref='reports')
     restaurant = relationship('Restaurant', backref='purchase_reports')
     listing = relationship('Listing', backref='purchase_reports')

@@ -105,25 +105,29 @@ class Restaurant(db.Model):
         except Exception as e:
             return False, f"Failed to delete image file: {str(e)}"
 
+    @property
     def is_active(self):
+        """Check if restaurant is active (not under punishment)"""
         current_time = datetime.now(UTC)
-        punishment = RestaurantPunishment.query.filter(
+        active_punishment = RestaurantPunishment.query.filter(
             RestaurantPunishment.restaurant_id == self.id,
+            RestaurantPunishment.is_active == True,
+            RestaurantPunishment.is_reverted == False,
             (
-                    (RestaurantPunishment.punishment_type == 'PERMANENT') |
-                    (
-                            (RestaurantPunishment.punishment_type == 'TEMPORARY') &
-                            (RestaurantPunishment.end_date > current_time)
-                    )
+                (RestaurantPunishment.punishment_type == "PERMANENT") |
+                (
+                    (RestaurantPunishment.punishment_type == "TEMPORARY") &
+                    (RestaurantPunishment.end_date > current_time)
+                )
             )
         ).first()
-        return punishment is None
+        return active_punishment is None
 
     def can_accept_orders(self):
-        return self.is_active()
+        return self.is_active
 
     def can_update_details(self):
-        return self.is_active()
+        return self.is_active
 
     def increment_flash_deals_count(self):
         self.flash_deals_count += 1
