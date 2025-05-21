@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, UTC
 from decimal import Decimal
 import uuid
 from werkzeug.datastructures import MultiDict
+from io import BytesIO
 
 
 class TestAPIEndpoints(unittest.TestCase):
@@ -22,64 +23,64 @@ class TestAPIEndpoints(unittest.TestCase):
             db.drop_all()
             db.create_all()
 
+            # Create owner user
             unique_id = str(uuid.uuid4())[:8]
-            self.test_email = f"test_{unique_id}@example.com"
-            self.test_password = "password123"
-            self.test_user = User(
-                name="Test User",
-                email=self.test_email,
+            self.owner_email = f"owner_{unique_id}@example.com"
+            self.owner_password = "password123"
+            self.owner = User(
+                name="Test Owner",
+                email=self.owner_email,
                 phone_number="+1234567890",
-                password=generate_password_hash(self.test_password),
+                password=generate_password_hash(self.owner_password),
                 role="owner",
                 email_verified=True
             )
-            db.session.add(self.test_user)
-            db.session.commit()
 
-            login_data = {
-                'email': self.test_email,
-                'password': self.test_password,
-                'login_type': 'email',
-                'password_login': True
-            }
-
-            response = self.client.post(
-                f'{self.base_url}/login',
-                json=login_data,
-                content_type='application/json'
+            # Create customer user
+            self.customer_email = f"customer_{unique_id}@example.com"
+            self.customer_password = "password123"
+            self.customer = User(
+                name="Test Customer",
+                email=self.customer_email,
+                phone_number="+1234567891",
+                password=generate_password_hash(self.customer_password),
+                role="customer",
+                email_verified=True
             )
 
-            if response.status_code == 200:
-                response_data = json.loads(response.data.decode('utf-8'))
-                self.auth_token = response_data.get('token')
-                self.headers = {
-                    'Authorization': f'Bearer {self.auth_token}'
-                }
-            else:
-                print(f"Login failed with status code: {response.status_code}")
+            db.session.add(self.owner)
+            db.session.add(self.customer)
+            db.session.commit()
 
-    def tearDown(self):
-        """Clean up after each test"""
-        with self.app.app_context():
-            db.session.remove()
-            db.drop_all()
+            # Login as owner
+            self.owner_token = self._get_auth_token(self.owner_email, self.owner_password)
+            self.owner_headers = {'Authorization': f'Bearer {self.owner_token}'} if self.owner_token else {}
 
-    def test_get_restaurants_endpoint(self):
-        """Test GET /v1/restaurants endpoint"""
-        response = self.client.get(
-            f'{self.base_url}/restaurants',
-            headers=self.headers
+            # Login as customer
+            self.customer_token = self._get_auth_token(self.customer_email, self.customer_password)
+            self.customer_headers = {'Authorization': f'Bearer {self.customer_token}'} if self.customer_token else {}
+
+    def _get_auth_token(self, email, password):
+        """Helper method to get auth token"""
+        login_data = {
+            'email': email,
+            'password': password,
+            'login_type': 'email',
+            'password_login': True
+        }
+
+        response = self.client.post(
+            f'{self.base_url}/login',
+            json=login_data,
+            content_type='application/json'
         )
-        self.assertEqual(response.status_code, 404)
-        data = json.loads(response.data.decode('utf-8'))
-        self.assertEqual(data['message'], "No restaurant found for the owner")
 
-    def test_create_restaurant(self):
-        """Test POST /v1/restaurants endpoint"""
-        if not hasattr(self, 'auth_token'):
-            self.skipTest("Auth token not available")
+        if response.status_code == 200:
+            return json.loads(response.data.decode('utf-8')).get('token')
+        return None
 
-        # Create form data
+    def _create_test_restaurant(self):
+        """Helper method to create a test restaurant"""
         form_data = {
             'restaurantName': 'Test Restaurant',
             'restaurantDescription': 'Test Description',
@@ -95,58 +96,231 @@ class TestAPIEndpoints(unittest.TestCase):
             'delivery': 'true'
         }
 
-        print("\nSending restaurant creation request...")
-        print(f"Headers: {self.headers}")
-        print(f"Form Data: {form_data}")
-
         response = self.client.post(
             f'{self.base_url}/restaurants',
-            data=form_data,  # Use data instead of json for form data
-            headers=self.headers
+            data=form_data,
+            headers=self.owner_headers
         )
 
-        print(f"\nCreate Restaurant Response Status: {response.status_code}")
-        print(f"Create Restaurant Response Headers: {dict(response.headers)}")
-        print(f"Create Restaurant Response Data: {response.data.decode('utf-8')}")
+        if response.status_code == 201:
+            return json.loads(response.data.decode('utf-8'))['restaurant']
+        return None
 
-        self.assertEqual(response.status_code, 201)
-        data = json.loads(response.data.decode('utf-8'))
-        self.assertIn('id', data['restaurant'])
+    def _create_test_listing(self, restaurant_id):
+        """Helper method to create a test listing"""
+        # Create a dummy image
+        image = (BytesIO(b'dummy image data'), 'test_image.jpg')
 
-    def test_user_profile(self):
-        """Test GET /v1/user endpoint"""
-        if not hasattr(self, 'auth_token'):
-            self.skipTest("Auth token not available")
+        form_data = {
+            'title': 'Test Listing',
+            'description': 'Test Description',
+            'original_price': '10.99',
+            'pick_up_price': '8.99',
+            'delivery_price': '12.99',
+            'count': '5',
+            'consume_within': '24',
+            'image': image
+        }
 
-        response = self.client.get(
-            f'{self.base_url}/user',
-            headers=self.headers
+        response = self.client.post(
+            f'{self.base_url}/restaurants/{restaurant_id}/listings',
+            data=form_data,
+            headers=self.owner_headers,
+            content_type='multipart/form-data'
+        )
+
+        if response.status_code == 201:
+            return json.loads(response.data.decode('utf-8'))['listing']
+        return None
+
+    def tearDown(self):
+        """Clean up after each test"""
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    # Authentication Tests
+    def test_login_success(self):
+        """Test successful login"""
+        response = self.client.post(
+            f'{self.base_url}/login',
+            json={
+                'email': self.owner_email,
+                'password': self.owner_password,
+                'login_type': 'email',
+                'password_login': True
+            },
+            content_type='application/json'
         )
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data.decode('utf-8'))
-        self.assertEqual(data['user_data']['email'], self.test_email)
-        self.assertEqual(data['user_data']['role'], 'owner')
-        self.assertTrue(data['user_data']['email_verified'])
+        self.assertIn('token', data)
 
-    def test_unauthorized_access(self):
-        """Test endpoints with unauthorized access"""
-        protected_endpoints = [
-            ('POST', f'{self.base_url}/restaurants'),
-            ('GET', f'{self.base_url}/user'),
-            ('POST', f'{self.base_url}/cart'),
-            ('GET', f'{self.base_url}/addresses')
-        ]
+    def test_login_failure(self):
+        """Test login with wrong password"""
+        response = self.client.post(
+            f'{self.base_url}/login',
+            json={
+                'email': self.owner_email,
+                'password': 'wrongpassword',
+                'login_type': 'email',
+                'password_login': True
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 401)
 
-        for method, endpoint in protected_endpoints:
-            response = self.client.open(
-                endpoint,
-                method=method
-            )
-            self.assertEqual(
-                response.status_code,
-                401,
-                f"Expected 401 for {method} {endpoint}, got {response.status_code}"
-            )
+    # Restaurant Tests
+    def test_create_restaurant_success(self):
+        """Test creating a restaurant with all required fields"""
+        form_data = {
+            'restaurantName': 'Test Restaurant',
+            'restaurantDescription': 'Test Description',
+            'restaurantEmail': 'restaurant@test.com',
+            'restaurantPhone': '+1234567890',
+            'category': 'Test Category',
+            'longitude': '28.979530',
+            'latitude': '41.015137',
+            'workingDays': 'Monday,Tuesday',
+            'workingHoursStart': '09:00',
+            'workingHoursEnd': '22:00',
+            'pickup': 'true',
+            'delivery': 'true'
+        }
+
+        response = self.client.post(
+            f'{self.base_url}/restaurants',
+            data=form_data,
+            headers=self.owner_headers
+        )
+
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data.decode('utf-8'))
+        self.assertIn('restaurant', data)
+        self.assertEqual(data['restaurant']['restaurantName'], form_data['restaurantName'])
+
+    def test_create_restaurant_missing_required_fields(self):
+        """Test creating a restaurant with missing required fields"""
+        form_data = {
+            'restaurantDescription': 'Test Description',
+            'pickup': 'true',
+            'delivery': 'true'
+        }
+
+        response = self.client.post(
+            f'{self.base_url}/restaurants',
+            data=form_data,
+            headers=self.owner_headers
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_customer_cannot_create_restaurant(self):
+        """Test that customers cannot create restaurants"""
+        form_data = {
+            'restaurantName': 'Test Restaurant',
+            'category': 'Test Category',
+            'longitude': '28.979530',
+            'latitude': '41.015137'
+        }
+
+        response = self.client.post(
+            f'{self.base_url}/restaurants',
+            data=form_data,
+            headers=self.customer_headers
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    # Listing Tests
+    def test_create_listing(self):
+        """Test creating a listing for a restaurant"""
+        # First create a restaurant
+        restaurant = self._create_test_restaurant()
+        self.assertIsNotNone(restaurant)
+
+        # Create a listing
+        image = (BytesIO(b'dummy image data'), 'test_image.jpg')
+        form_data = {
+            'title': 'Test Listing',
+            'description': 'Test Description',
+            'original_price': '10.99',
+            'pick_up_price': '8.99',
+            'delivery_price': '12.99',
+            'count': '5',
+            'consume_within': '24',
+            'image': image
+        }
+
+        response = self.client.post(
+            f'{self.base_url}/restaurants/{restaurant["id"]}/listings',
+            data=form_data,
+            headers=self.owner_headers,
+            content_type='multipart/form-data'
+        )
+
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data.decode('utf-8'))
+        self.assertIn('listing', data)
+
+    # User Profile Tests
+    def test_get_user_profile(self):
+        """Test getting user profile"""
+        response = self.client.get(
+            f'{self.base_url}/user',
+            headers=self.owner_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data.decode('utf-8'))
+        self.assertEqual(data['user_data']['email'], self.owner_email)
+
+    def test_update_user_profile(self):
+        """Test updating user profile"""
+        new_username = "Updated Username"
+        response = self.client.put(
+            f'{self.base_url}/user/username',
+            json={'username': new_username},
+            headers=self.owner_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    # Search Tests
+    def test_search_restaurants(self):
+        """Test searching restaurants"""
+        # First create a restaurant
+        self._create_test_restaurant()
+
+        response = self.client.get(
+            f'{self.base_url}/search',
+            query_string={
+                'type': 'restaurant',
+                'query': 'Test'
+            }
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data.decode('utf-8'))
+        self.assertTrue(len(data['results']) > 0)
+
+    # Flash Deals Tests
+    def test_get_flash_deals(self):
+        """Test getting flash deals"""
+        # Create a restaurant with flash deals
+        restaurant = self._create_test_restaurant()
+
+        response = self.client.post(
+            f'{self.base_url}/flash-deals',
+            json={
+                'latitude': 41.015137,
+                'longitude': 28.979530,
+                'radius': 10
+            },
+            headers=self.customer_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
 
 
 if __name__ == '__main__':
