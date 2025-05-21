@@ -16,7 +16,7 @@ from src.services.restaurant_service import (
     delete_restaurant_service,
     get_restaurants_in_proximity, update_restaurant_service,
 )
-from src.models import User, RestaurantComment
+from src.models import User, RestaurantComment, Achievement, AchievementType, UserAchievement
 from src.utils.cloud_storage import UPLOAD_FOLDER
 
 restaurant_bp = Blueprint("restaurant", __name__)
@@ -749,8 +749,23 @@ def get_restaurant_comments(restaurant_id):
         comments = RestaurantComment.query.filter_by(restaurant_id=restaurant_id).all()
         comments_data = []
 
+        # Get the Regular Commenter achievement
+        regular_commenter_achievement = Achievement.query.filter_by(
+            achievement_type=AchievementType.REGULAR_COMMENTER
+        ).first()
+
         for comment in comments:
             badges_data = [{"name": badge.badge_name, "is_positive": badge.is_positive} for badge in comment.badges]
+
+            # Check if the user has the Regular Commenter achievement
+            should_highlight = False
+            if regular_commenter_achievement:
+                user_has_achievement = UserAchievement.query.filter_by(
+                    user_id=comment.user_id,
+                    achievement_id=regular_commenter_achievement.id
+                ).first() is not None
+
+                should_highlight = user_has_achievement
 
             comment_data = {
                 "id": comment.id,
@@ -758,7 +773,8 @@ def get_restaurant_comments(restaurant_id):
                 "comment": comment.comment,
                 "rating": float(comment.rating),
                 "timestamp": str(comment.timestamp),
-                "badges": badges_data
+                "badges": badges_data,
+                "should_highlight": should_highlight  # Add this flag for the frontend
             }
             comments_data.append(comment_data)
 
@@ -782,7 +798,6 @@ def get_restaurant_comments(restaurant_id):
         }
         print(json.dumps({"error_response": error_response, "status": 500}, indent=2))
         return jsonify(error_response), 500
-
 
 @restaurant_bp.route("/restaurants/<int:restaurant_id>", methods=["PUT"])
 @jwt_required()
