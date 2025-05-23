@@ -6,8 +6,7 @@ from azure.communication.email import EmailClient
 from dotenv import load_dotenv
 load_dotenv()
 
-SENDER_EMAIL_ADDRESS = "DoNotReply@7de60d6f-de4b-4be3-bfaf-197e1239ab35.azurecomm.net"
-
+SENDER_EMAIL_ADDRESS = os.getenv("SENDER_ADDRESS")
 def send_email(recipient_address, subject, verification_code):
     try:
         # Retrieve the connection string
@@ -77,3 +76,13 @@ def send_email(recipient_address, subject, verification_code):
         print("Error occurred while sending email:", e)
 
 
+if __name__ == "__main__":
+    print("Testing email sending...")
+    print("SENDER_ADDRESS:", SENDER_EMAIL_ADDRESS)
+    print("EMAIL_CONNECTION_STRING:", os.getenv("EMAIL_CONNECTION_STRING"))
+
+    test_recipient = os.getenv("TEST_EMAIL_ADDRESS")
+    test_subject = "Test Email from FreshDeal"
+    test_verification_code = "123456"
+
+    send_email(test_recipient, test_subject, test_verification_code)
