@@ -54,15 +54,21 @@ def get_restaurant_badges(restaurant_id):
     delivery_score = badge_record.fastDeliveryPoint - badge_record.slowDeliveryPoint
     friendly_score = badge_record.customerFriendlyPoint - badge_record.notCustomerFriendlyPoint
 
-    if fresh_score > 100:
+    if fresh_score > 0:
         badges.append('fresh')
-    if delivery_score > 100:
+    else:
+        badges.append('not_fresh')
+    if delivery_score > 0:
         badges.append('fast_delivery')
-    if friendly_score > 100:
+    else:
+        badges.append('slow_delivery')
+    if friendly_score > 0:
         badges.append('customer_friendly')
+    else:
+        badges.append('not_customer_friendly')
+
 
     return badges
-
 
 def get_restaurant_badge_analytics(restaurant_id):
     badge_record = RestaurantBadgePoints.query.filter_by(restaurantID=restaurant_id).first()
