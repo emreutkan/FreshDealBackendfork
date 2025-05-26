@@ -1,9 +1,9 @@
 # services/auth_service.py
 import logging
+import os
 from datetime import datetime, timedelta, UTC
 from secrets import token_urlsafe
 
-from flask import current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 from email_validator import validate_email, EmailNotValidError
 import phonenumbers
@@ -102,7 +102,13 @@ def login_user(data, client_ip):
             logger.info("Password missing for password login.")
             return {"success": False, "message": "Password is required for login."}, 400
         if check_password_hash(user.password, password):
-            token = create_access_token(identity=str(user.id), expires_delta=False)
+            # Add is_admin flag to the token based on user role
+            is_admin = user.role in ['owner', 'support']
+            token = create_access_token(
+                identity=str(user.id),
+                additional_claims={"is_admin": is_admin},
+                expires_delta=False
+            )
             logger.info(f"User_id {user.id} authenticated successfully with password.")
             return {"success": True, "token": token}, 200
         else:
@@ -340,8 +346,10 @@ def initiate_password_reset(data):
         db.session.commit()
 
         # Create the reset link for the web interface
-        reset_base_url = current_app.config.get('BASE_URL', 'https://freshdealapi-fkfaajfaffh4c0ex.uksouth-01.azurewebsites.net')
-        reset_link = f"{reset_base_url}/v1/reset-password/{reset_token}"
+        # get the base url from .env
+
+
+        reset_link = f"{os.getenv("API_URL")}/v1/reset-password/{reset_token}"
 
         # Send a user-friendly email
         subject = "Password Reset Request"
@@ -444,3 +452,4 @@ def reset_password(data):
             "message": "An error occurred while resetting the password.",
             "details": {"error_code": "SERVER_ERROR"}
         }, 500
+
