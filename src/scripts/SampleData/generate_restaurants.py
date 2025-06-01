@@ -262,6 +262,11 @@ def generate_restaurants():
         }
     ]
 
+    # Set all restaurants to have a rating and ratingCount
+    for r in restaurants:
+        r["rating"] = 4.5  # or any float value you want
+        r["ratingCount"] = 100  # or any int value you want
+
     os.makedirs('../exported_json', exist_ok=True)
     with open('../exported_json/restaurants.json', 'w', encoding='utf-8') as f:
         json.dump(restaurants, f, ensure_ascii=False, indent=2)

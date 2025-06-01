@@ -349,7 +349,6 @@ class ChatbotService:
             ]
         }
 
-    # === CONTEXTUAL RESPONSES ===
     @staticmethod
     def handle_user_query(user_id, query_text):
         """Process natural language queries and route to appropriate methods"""

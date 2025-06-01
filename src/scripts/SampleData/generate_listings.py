@@ -150,7 +150,7 @@ def generate_listings():
             fs      = fresh_scores[idx]
 
             # 3) count
-            cnt = base_count + rest_id
+            cnt = 100  # Set all stock to 100
 
             # 4) image URL override?
             manual = IMAGE_URL_OVERRIDES.get(title)
