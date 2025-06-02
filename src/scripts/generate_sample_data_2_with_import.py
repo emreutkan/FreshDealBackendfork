@@ -52,21 +52,32 @@ for script in generators:
         print(f"ERROR: {script} failed with exit code {rc}")
         sys.exit(rc)
 
-# 2) Import into MySQL
-print("\n=== Importing JSON into MySQL ===")
+# 2) Import into MSSQL
+print("\n=== Importing JSON into MSSQL ===")
 load_dotenv()
-MYSQL_URI = os.getenv("MYSQL_URI")
-if not MYSQL_URI:
-    sys.exit("ERROR: Missing MYSQL_URI in .env")
-engine = create_engine(MYSQL_URI)
 
-# disable FK checks
-with engine.begin() as conn:
-    conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
+# Construct MSSQL URI from .env variables
+DB_SERVER = os.getenv("DB_SERVER")
+DB_NAME = os.getenv("DB_NAME")
+DB_USERNAME = os.getenv("DB_USERNAME")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_DRIVER = os.getenv("DB_DRIVER")
 
-# existing tables
+if not all([DB_SERVER, DB_NAME, DB_USERNAME, DB_PASSWORD, DB_DRIVER]):
+    sys.exit("ERROR: Missing one or more MSSQL connection details in .env (DB_SERVER, DB_NAME, DB_USERNAME, DB_PASSWORD, DB_DRIVER)")
+
+MSSQL_URI = f"mssql+pyodbc://{DB_USERNAME}:{DB_PASSWORD}@{DB_SERVER}/{DB_NAME}?driver={DB_DRIVER}"
+engine = create_engine(MSSQL_URI)
+
+# For MSSQL, foreign key checks are typically managed at the constraint level or per transaction.
+# We will proceed assuming constraints are deferrable or will be handled by the order of operations.
+# If specific FK handling is needed during bulk import, it's more complex than a simple session variable.
+
+# existing tables (MSSQL version)
 with engine.connect() as conn:
-    existing_tables = [r[0] for r in conn.execute(text("SHOW TABLES;"))]
+    # For MSSQL, information_schema.tables is standard
+    result = conn.execute(text("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = :db_name"), {'db_name': DB_NAME})
+    existing_tables = [row[0] for row in result]
     print(f"Existing tables: {existing_tables}")
 
 # JSON filename → table name overrides
@@ -115,77 +126,92 @@ for fname in ordered_files:
     if df.empty:
         continue
 
-    # keep only real columns
-    cols = [c[0] for c in engine.connect().execute(text(f"DESCRIBE `{table}`;"))]
-    df   = df[[c for c in df.columns if c in cols]]
+    # keep only real columns (MSSQL version)
+    with engine.connect() as conn:
+        # For MSSQL, information_schema.columns provides column info
+        result = conn.execute(text(f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_NAME = '{table}' AND TABLE_CATALOG = '{DB_NAME}'"))
+        cols = [row[0] for row in result]
+    df_cols_in_db = [c for c in df.columns if c in cols]
+    if not df_cols_in_db:
+        print(f"WARN: No matching columns found for table {table} in DataFrame from {fname}. Skipping.")
+        continue
+    df   = df[df_cols_in_db]
 
     # drop already-present IDs for general tables
-    if table != 'user_achievements' and 'id' in df.columns:
-        existing_ids = {r[0] for r in engine.connect().execute(text(f"SELECT id FROM `{table}`;"))}
-        df = df[~df['id'].isin(existing_ids)]
-        if df.empty:
-            print(f"INFO: All entries in {fname} for table {table} already exist based on ID. Skipping.")
-            continue
+    if table != 'user_achievements' and 'id' in df.columns and table in existing_tables:
+        try:
+            with engine.connect() as conn:
+                existing_ids_result = conn.execute(text(f"SELECT id FROM [{table}]")) # Use square brackets for table names in MSSQL
+                existing_ids = {r[0] for r in existing_ids_result}
+            df = df[~df['id'].isin(existing_ids)]
+            if df.empty:
+                print(f"INFO: All entries in {fname} for table {table} already exist based on ID. Skipping.")
+                continue
+        except Exception as e:
+            print(f"WARN: Could not check existing IDs for table {table}, proceeding with insert. Error: {e}")
 
     # Specifically handle unique constraints for user_achievements
-    if table == 'user_achievements' and not df.empty:
+    if table == 'user_achievements' and not df.empty and table in existing_tables:
         # 1. Handle Primary Key 'id' constraint
         if 'id' in df.columns:
-            with engine.connect() as conn:
-                existing_ids_result = conn.execute(text("SELECT id FROM user_achievements"))
-                existing_ids = {row[0] for row in existing_ids_result}
+            try:
+                with engine.connect() as conn:
+                    existing_ids_result = conn.execute(text("SELECT id FROM user_achievements"))
+                    existing_ids = {row[0] for row in existing_ids_result}
 
-            original_row_count = len(df)
-            df = df[~df['id'].isin(existing_ids)]
-            if len(df) < original_row_count:
-                print(f"INFO: Filtered out {original_row_count - len(df)} rows from {fname} for user_achievements due to duplicate IDs.")
+                original_row_count = len(df)
+                df = df[~df['id'].isin(existing_ids)]
+                if len(df) < original_row_count:
+                    print(f"INFO: Filtered out {original_row_count - len(df)} rows from {fname} for user_achievements due to duplicate IDs.")
 
-            if df.empty:
-                print(f"INFO: All user_achievements entries in {fname} had duplicate IDs. Skipping.")
-                continue
+                if df.empty:
+                    print(f"INFO: All user_achievements entries in {fname} had duplicate IDs. Skipping.")
+                    continue
+            except Exception as e:
+                print(f"WARN: Could not check existing IDs for user_achievements, proceeding. Error: {e}")
 
         # 2. Handle Unique Key (user_id, achievement_id) constraint
         if not df.empty and all(col in df.columns for col in ['user_id', 'achievement_id']):
-            with engine.connect() as conn:
-                result = conn.execute(text("SELECT user_id, achievement_id FROM user_achievements"))
-                existing_user_achievements = {tuple(row) for row in result}
+            try:
+                with engine.connect() as conn:
+                    result = conn.execute(text("SELECT user_id, achievement_id FROM user_achievements"))
+                    existing_user_achievements = {tuple(row) for row in result}
 
-            original_row_count = len(df)
-            # Ensure user_id and achievement_id are of a consistent type for comparison, e.g., int
-            # This might be necessary if data types are inconsistent between DataFrame and database query results
-            df_copy = df.copy() # Work on a copy to avoid SettingWithCopyWarning if types are changed
-            df_copy['user_id'] = df_copy['user_id'].astype(int)
-            df_copy['achievement_id'] = df_copy['achievement_id'].astype(int)
-            df_copy['_temp_tuple'] = df_copy.apply(lambda row: (row['user_id'], row['achievement_id']), axis=1)
+                original_row_count = len(df)
+                df_copy = df.copy()
+                df_copy['user_id'] = df_copy['user_id'].astype(int)
+                df_copy['achievement_id'] = df_copy['achievement_id'].astype(int)
+                df_copy['_temp_tuple'] = df_copy.apply(lambda row: (row['user_id'], row['achievement_id']), axis=1)
 
-            # Ensure existing_user_achievements tuples also have consistent types if necessary
-            # For example, if they might be strings from the DB but numbers in the DF
-            # existing_user_achievements_typed = {(int(ua[0]), int(ua[1])) for ua in existing_user_achievements}
-            # df = df[~df_copy['_temp_tuple'].isin(existing_user_achievements_typed)]
-            df = df[~df_copy['_temp_tuple'].isin(existing_user_achievements)] # Assuming types are consistent
+                df = df[~df_copy['_temp_tuple'].isin(existing_user_achievements)]
 
-            if len(df) < original_row_count:
-                 print(f"INFO: Filtered out {original_row_count - len(df)} rows from {fname} for user_achievements due to duplicate (user_id, achievement_id) pairs.")
+                if len(df) < original_row_count:
+                     print(f"INFO: Filtered out {original_row_count - len(df)} rows from {fname} for user_achievements due to duplicate (user_id, achievement_id) pairs.")
 
-            if df.empty:
-                print(f"INFO: All remaining user_achievements entries in {fname} had duplicate (user_id, achievement_id) pairs. Skipping.")
-                continue
+                if df.empty:
+                    print(f"INFO: All remaining user_achievements entries in {fname} had duplicate (user_id, achievement_id) pairs. Skipping.")
+                    continue
+            except Exception as e:
+                print(f"WARN: Could not check unique (user_id, achievement_id) for user_achievements, proceeding. Error: {e}")
 
     if df.empty: # Final check if DataFrame became empty after all filtering for any table
         print(f"INFO: No new data to insert for {table} from {fname} after filtering. Skipping.")
         continue
 
+    # For MSSQL, ensure table names with spaces or special characters are quoted if necessary,
+    # though pandas to_sql usually handles this. Using schema might be needed for some setups.
+    # Example: df.to_sql(table, engine, schema='dbo', index=False, if_exists='append', ...)
     df.to_sql(
         table,
         engine,
         index=False,
-        if_exists='append',
+        if_exists='append', # This will fail if the table doesn't exist. Consider 'replace' or ensure tables are created.
         dtype={c: SQLDateTime() for c in df.columns if 'date' in c.lower() or 'time' in c.lower()}
     )
     print(f"OK: {len(df)} rows added to {table}")
 
-# re-enable FK checks
-with engine.begin() as conn:
-    conn.execute(text("SET FOREIGN_KEY_CHECKS=1;"))
+# Re-enabling FK checks is not a direct command in MSSQL like in MySQL.
+# Constraints are either enabled or disabled. If they were disabled, they'd need to be re-enabled individually.
+# Assuming they remained enabled throughout.
 
 print("\nSUCCESS: All sample-data JSON generated and imported successfully.")
