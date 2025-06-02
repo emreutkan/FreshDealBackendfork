@@ -30,7 +30,7 @@ def create_app():
         raise SystemExit(f"Error: Missing environment variables: {', '.join(missing_vars)}")
 
     app.config['SQLALCHEMY_DATABASE_URI'] = (
-        f"mssql+pyodbc://{required_env_vars['DB_USERNAME']}:" 
+        f"mssql+pyodbc://{required_env_vars['DB_USERNAME']}:"
         f"{required_env_vars['DB_PASSWORD']}@"
         f"{required_env_vars['DB_SERVER']}/"
         f"{required_env_vars['DB_NAME']}?driver={required_env_vars['DB_DRIVER']}"
@@ -145,4 +145,5 @@ app = create_app()
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=8000, debug=False)
+
 

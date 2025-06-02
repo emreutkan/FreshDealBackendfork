@@ -327,12 +327,12 @@ def initiate_password_reset(data):
 
     user = get_user_by_email(email)
     if not user:
-        # For security reasons, still return success even if email doesn't exist
         logger.info(f"Password reset attempted for non-existent email: {email}")
         return {
-            "success": True,
-            "message": "If the email exists, a password reset link will be sent.",
-        }, 200
+            "success": False,
+            "message": "Email not found.",
+            "details": {"error_code": "EMAIL_NOT_FOUND"}
+        }, 404
 
     # Generate a secure token
     reset_token = token_urlsafe(32)
