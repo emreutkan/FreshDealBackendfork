@@ -23,6 +23,7 @@ from src.routes.flash_deals_routes import flash_deals_bp
 from src.routes.environmental_routes import environmental_bp
 from src.routes.ticket_routes import ticket_bp
 from src.routes.chatbot_routes import chatbot_bp
+from src.routes.admin_routes import admin_bp
 
 def init_app(app):
     api_v1 = Blueprint('api_v1', __name__, url_prefix='/v1')
@@ -49,4 +50,6 @@ def init_app(app):
     api_v1.register_blueprint(environmental_bp)
     api_v1.register_blueprint(ticket_bp)
     api_v1.register_blueprint(chatbot_bp)
+    api_v1.register_blueprint(admin_bp)
     app.register_blueprint(api_v1)
+
