@@ -201,14 +201,63 @@ for fname in ordered_files:
     # For MSSQL, ensure table names with spaces or special characters are quoted if necessary,
     # though pandas to_sql usually handles this. Using schema might be needed for some setups.
     # Example: df.to_sql(table, engine, schema='dbo', index=False, if_exists='append', ...)
-    df.to_sql(
-        table,
-        engine,
-        index=False,
-        if_exists='append', # This will fail if the table doesn't exist. Consider 'replace' or ensure tables are created.
-        dtype={c: SQLDateTime() for c in df.columns if 'date' in c.lower() or 'time' in c.lower()}
-    )
-    print(f"OK: {len(df)} rows added to {table}")
+
+    # Define tables that have an identity 'id' column and might receive explicit ID values from JSON
+    # Add other table names to this list if they also have an identity 'id' column
+    # and you intend to insert explicit values for it.
+    tables_that_need_identity_insert = ['users', 'customeraddresses', 'restaurants',
+                                        'listings', 'purchases', 'refund_records',
+                                        'restaurant_comments', 'comment_badges',
+                                        'restaurant_punishments', 'achievements',
+                                        'environmental_contributions', 'user_favorites',
+                                        'user_cart', 'user_devices', 'discountearned',
+                                        'restaurant_badge_points'] # Added most tables that have 'id'
+                                                                  # and are not 'user_achievements'
+                                                                  # Review this list based on actual schema.
+
+    identity_insert_was_set_on = False
+    with engine.connect() as conn:  # Use a single connection for all operations for this table
+        try:
+            # Check if IDENTITY_INSERT needs to be managed for this table
+            if table in tables_that_need_identity_insert and 'id' in df.columns:
+                conn.execute(text(f"SET IDENTITY_INSERT [{table}] ON"))
+                # No commit here, part of the larger transaction
+                identity_insert_was_set_on = True
+
+            # Perform the data insertion
+            df.to_sql(
+                name=table,
+                con=conn,  # Pass the connection object, not the engine
+                index=False,
+                if_exists='append',
+                dtype={c: SQLDateTime() for c in df.columns if 'date' in c.lower() or 'time' in c.lower()}
+            )
+
+            # If all successful so far, commit the transaction
+            conn.commit()
+            print(f"OK: {len(df)} rows added to {table}")
+
+        except Exception as e:
+            print(f"ERROR: During import for table {table} from {fname}: {e}")
+            try:
+                conn.rollback() # Rollback on any error during SET ON or to_sql
+                print(f"INFO: Transaction rolled back for table {table}.")
+            except Exception as er:
+                print(f"ERROR: During rollback for table {table}: {er}")
+        finally:
+            # Always attempt to turn IDENTITY_INSERT OFF if it was turned ON for this connection
+            if identity_insert_was_set_on:
+                print(f"DEBUG: In finally, for table {table}, identity_insert_was_set_on is True. Attempting to set IDENTITY_INSERT OFF.") # ADDED DEBUG
+                try:
+                    # This command will execute on the same connection `conn`.
+                    # If the previous transaction was committed or rolled back,
+                    # this will execute in a new context on the same connection.
+                    conn.execute(text(f"SET IDENTITY_INSERT [{table}] OFF"))
+                    conn.commit() # Ensure this SET OFF is also committed.
+                    print(f"INFO: IDENTITY_INSERT set to OFF for table {table}.")
+                except Exception as e_off:
+                    print(f"WARN: Failed to SET IDENTITY_INSERT OFF for table {table} in finally. Error: {e_off}")
+        # Connection `conn` is automatically closed here when exiting the `with` block.
 
 # Re-enabling FK checks is not a direct command in MSSQL like in MySQL.
 # Constraints are either enabled or disabled. If they were disabled, they'd need to be re-enabled individually.
