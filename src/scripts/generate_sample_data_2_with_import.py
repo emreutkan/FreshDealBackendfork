@@ -4,8 +4,9 @@ import sys
 import subprocess
 import json
 import pandas as pd
-from sqlalchemy import create_engine, text, DateTime as SQLDateTime
+import pyodbc
 from dotenv import load_dotenv
+import datetime
 
 # 0) Locate dirs
 SCRIPT_DIR   = os.path.dirname(__file__)                    # .../src/scripts
@@ -13,7 +14,7 @@ SAMPLES_DIR  = os.path.join(SCRIPT_DIR, 'SampleData')        # .../src/scripts/S
 # ← now point one level up to src/exported_json
 EXPORT_JSON  = os.path.normpath(os.path.join(SCRIPT_DIR, '..', 'exported_json'))
 
-# 1) Exactly the generators you’ve written, in dependency order:
+# 1) Exactly the generators you've written, in dependency order:
 generators = [
     "generate_users.py",
     "generate_user_address.py",
@@ -28,7 +29,6 @@ generators = [
     "generate_environmental_contributions.py",
     "generate_user_favorites_cart_and_devices.py",
     "generate_discounts_earned.py"
-
 ]
 
 print("\n=== Generating JSON data ===")
@@ -56,7 +56,7 @@ for script in generators:
 print("\n=== Importing JSON into MSSQL ===")
 load_dotenv()
 
-# Construct MSSQL URI from .env variables
+# Get connection details from .env
 DB_SERVER = os.getenv("DB_SERVER")
 DB_NAME = os.getenv("DB_NAME")
 DB_USERNAME = os.getenv("DB_USERNAME")
@@ -66,19 +66,15 @@ DB_DRIVER = os.getenv("DB_DRIVER")
 if not all([DB_SERVER, DB_NAME, DB_USERNAME, DB_PASSWORD, DB_DRIVER]):
     sys.exit("ERROR: Missing one or more MSSQL connection details in .env (DB_SERVER, DB_NAME, DB_USERNAME, DB_PASSWORD, DB_DRIVER)")
 
-MSSQL_URI = f"mssql+pyodbc://{DB_USERNAME}:{DB_PASSWORD}@{DB_SERVER}/{DB_NAME}?driver={DB_DRIVER}"
-engine = create_engine(MSSQL_URI)
+# Create a direct ODBC connection
+connection_string = f"DRIVER={{{DB_DRIVER}}};SERVER={DB_SERVER};DATABASE={DB_NAME};UID={DB_USERNAME};PWD={DB_PASSWORD}"
+conn = pyodbc.connect(connection_string)
+cursor = conn.cursor()
 
-# For MSSQL, foreign key checks are typically managed at the constraint level or per transaction.
-# We will proceed assuming constraints are deferrable or will be handled by the order of operations.
-# If specific FK handling is needed during bulk import, it's more complex than a simple session variable.
-
-# existing tables (MSSQL version)
-with engine.connect() as conn:
-    # For MSSQL, information_schema.tables is standard
-    result = conn.execute(text("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = :db_name"), {'db_name': DB_NAME})
-    existing_tables = [row[0] for row in result]
-    print(f"Existing tables: {existing_tables}")
+# Get existing tables
+cursor.execute(f"SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_CATALOG = '{DB_NAME}'")
+existing_tables = [row[0] for row in cursor.fetchall()]
+print(f"Existing tables: {existing_tables}")
 
 # JSON filename → table name overrides
 table_map = {
@@ -100,15 +96,35 @@ ordered_files = [
     "comment_badges.json",
     "restaurant_punishments.json",
     "achievements.json",
+    "user_achievements.json",
     "environmental_contributions.json",
     "user_favorites.json",
     "user_cart.json",
-    "user_achievements.json",
     "user_devices.json",
     "discountearned.json",
-
 ]
 
+# Helper function to get column names for a table
+def get_table_columns(table_name):
+    cursor.execute(f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_NAME = '{table_name}'")
+    return [row[0] for row in cursor.fetchall()]
+
+# Helper function to parse date strings
+def parse_date(date_str):
+    if not date_str or date_str == 'null' or date_str is None:
+        return None
+    try:
+        # Try standard format first
+        return datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            # Try with milliseconds
+            return datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S.%f")
+        except ValueError:
+            # Try with just date
+            return datetime.datetime.strptime(date_str, "%Y-%m-%d")
+
+# Process each file
 for fname in ordered_files:
     table = table_map.get(fname, fname.rsplit('.',1)[0])
     if table not in existing_tables:
@@ -121,146 +137,123 @@ for fname in ordered_files:
         continue
 
     print(f"Importing {fname} -> {table}")
-    data = json.load(open(fpath, encoding='utf-8'))
-    df   = pd.DataFrame(data if isinstance(data, list) else [data])
-    if df.empty:
+
+    # Load the JSON data
+    with open(fpath, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    if not data:
+        print(f"WARN: No data found in {fname}")
         continue
 
-    # keep only real columns (MSSQL version)
-    with engine.connect() as conn:
-        # For MSSQL, information_schema.columns provides column info
-        result = conn.execute(text(f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_NAME = '{table}' AND TABLE_CATALOG = '{DB_NAME}'"))
-        cols = [row[0] for row in result]
-    df_cols_in_db = [c for c in df.columns if c in cols]
-    if not df_cols_in_db:
-        print(f"WARN: No matching columns found for table {table} in DataFrame from {fname}. Skipping.")
-        continue
-    df   = df[df_cols_in_db]
+    # Ensure data is a list
+    if not isinstance(data, list):
+        data = [data]
 
-    # drop already-present IDs for general tables
-    if table != 'user_achievements' and 'id' in df.columns and table in existing_tables:
+    # Get table columns
+    table_columns = get_table_columns(table)
+
+    # Filter data to only include existing columns
+    filtered_data = []
+    for item in data:
+        filtered_item = {k: v for k, v in item.items() if k in table_columns}
+        filtered_data.append(filtered_item)
+
+    if not filtered_data:
+        print(f"WARN: No valid columns found for {table}")
+        continue
+
+    # Check for existing IDs
+    if "id" in table_columns and table != 'user_achievements':
         try:
-            with engine.connect() as conn:
-                existing_ids_result = conn.execute(text(f"SELECT id FROM [{table}]")) # Use square brackets for table names in MSSQL
-                existing_ids = {r[0] for r in existing_ids_result}
-            df = df[~df['id'].isin(existing_ids)]
-            if df.empty:
+            cursor.execute(f"SELECT id FROM {table}")
+            existing_ids = {row[0] for row in cursor.fetchall()}
+            filtered_data = [item for item in filtered_data if item.get('id') not in existing_ids]
+            if not filtered_data:
                 print(f"INFO: All entries in {fname} for table {table} already exist based on ID. Skipping.")
                 continue
         except Exception as e:
             print(f"WARN: Could not check existing IDs for table {table}, proceeding with insert. Error: {e}")
 
-    # Specifically handle unique constraints for user_achievements
-    if table == 'user_achievements' and not df.empty and table in existing_tables:
-        # 1. Handle Primary Key 'id' constraint
-        if 'id' in df.columns:
+    # Handle special case for user_achievements
+    if table == 'user_achievements':
+        # Check for existing IDs
+        try:
+            cursor.execute("SELECT id FROM user_achievements")
+            existing_ids = {row[0] for row in cursor.fetchall()}
+            original_count = len(filtered_data)
+            filtered_data = [item for item in filtered_data if item.get('id') not in existing_ids]
+            if len(filtered_data) < original_count:
+                print(f"INFO: Filtered out {original_count - len(filtered_data)} rows from {fname} for user_achievements due to duplicate IDs.")
+        except Exception as e:
+            print(f"WARN: Could not check existing IDs for user_achievements, proceeding. Error: {e}")
+
+        # Check for existing user_id/achievement_id pairs
+        if filtered_data and all(col in filtered_data[0] for col in ['user_id', 'achievement_id']):
             try:
-                with engine.connect() as conn:
-                    existing_ids_result = conn.execute(text("SELECT id FROM user_achievements"))
-                    existing_ids = {row[0] for row in existing_ids_result}
-
-                original_row_count = len(df)
-                df = df[~df['id'].isin(existing_ids)]
-                if len(df) < original_row_count:
-                    print(f"INFO: Filtered out {original_row_count - len(df)} rows from {fname} for user_achievements due to duplicate IDs.")
-
-                if df.empty:
-                    print(f"INFO: All user_achievements entries in {fname} had duplicate IDs. Skipping.")
-                    continue
-            except Exception as e:
-                print(f"WARN: Could not check existing IDs for user_achievements, proceeding. Error: {e}")
-
-        # 2. Handle Unique Key (user_id, achievement_id) constraint
-        if not df.empty and all(col in df.columns for col in ['user_id', 'achievement_id']):
-            try:
-                with engine.connect() as conn:
-                    result = conn.execute(text("SELECT user_id, achievement_id FROM user_achievements"))
-                    existing_user_achievements = {tuple(row) for row in result}
-
-                original_row_count = len(df)
-                df_copy = df.copy()
-                df_copy['user_id'] = df_copy['user_id'].astype(int)
-                df_copy['achievement_id'] = df_copy['achievement_id'].astype(int)
-                df_copy['_temp_tuple'] = df_copy.apply(lambda row: (row['user_id'], row['achievement_id']), axis=1)
-
-                df = df[~df_copy['_temp_tuple'].isin(existing_user_achievements)]
-
-                if len(df) < original_row_count:
-                     print(f"INFO: Filtered out {original_row_count - len(df)} rows from {fname} for user_achievements due to duplicate (user_id, achievement_id) pairs.")
-
-                if df.empty:
-                    print(f"INFO: All remaining user_achievements entries in {fname} had duplicate (user_id, achievement_id) pairs. Skipping.")
-                    continue
+                cursor.execute("SELECT user_id, achievement_id FROM user_achievements")
+                existing_pairs = {(row[0], row[1]) for row in cursor.fetchall()}
+                original_count = len(filtered_data)
+                filtered_data = [item for item in filtered_data if (item.get('user_id'), item.get('achievement_id')) not in existing_pairs]
+                if len(filtered_data) < original_count:
+                    print(f"INFO: Filtered out {original_count - len(filtered_data)} rows from {fname} for user_achievements due to duplicate (user_id, achievement_id) pairs.")
             except Exception as e:
                 print(f"WARN: Could not check unique (user_id, achievement_id) for user_achievements, proceeding. Error: {e}")
 
-    if df.empty: # Final check if DataFrame became empty after all filtering for any table
+    if not filtered_data:
         print(f"INFO: No new data to insert for {table} from {fname} after filtering. Skipping.")
         continue
 
-    # For MSSQL, ensure table names with spaces or special characters are quoted if necessary,
-    # though pandas to_sql usually handles this. Using schema might be needed for some setups.
-    # Example: df.to_sql(table, engine, schema='dbo', index=False, if_exists='append', ...)
+    # Get column names for insert
+    columns = list(filtered_data[0].keys())
 
-    # Define tables that have an identity 'id' column and might receive explicit ID values from JSON
-    # Add other table names to this list if they also have an identity 'id' column
-    # and you intend to insert explicit values for it.
-    tables_that_need_identity_insert = ['users', 'customeraddresses', 'restaurants',
-                                        'listings', 'purchases', 'refund_records',
-                                        'restaurant_comments', 'comment_badges',
-                                        'restaurant_punishments', 'achievements',
-                                        'environmental_contributions', 'user_favorites',
-                                        'user_cart', 'user_devices', 'discountearned',
-                                        'restaurant_badge_points'] # Added most tables that have 'id'
-                                                                  # and are not 'user_achievements'
-                                                                  # Review this list based on actual schema.
+    # Create placeholders for SQL statement
+    placeholders = ','.join(['?' for _ in columns])
 
-    identity_insert_was_set_on = False
-    with engine.connect() as conn:  # Use a single connection for all operations for this table
+    # Create column string for SQL statement
+    column_str = ','.join(columns)
+
+    # Set IDENTITY_INSERT ON if necessary
+    identity_insert_was_set = False
+    if 'id' in columns:
         try:
-            # Check if IDENTITY_INSERT needs to be managed for this table
-            if table in tables_that_need_identity_insert and 'id' in df.columns:
-                conn.execute(text(f"SET IDENTITY_INSERT [{table}] ON"))
-                # No commit here, part of the larger transaction
-                identity_insert_was_set_on = True
-
-            # Perform the data insertion
-            df.to_sql(
-                name=table,
-                con=conn,  # Pass the connection object, not the engine
-                index=False,
-                if_exists='append',
-                dtype={c: SQLDateTime() for c in df.columns if 'date' in c.lower() or 'time' in c.lower()}
-            )
-
-            # If all successful so far, commit the transaction
-            conn.commit()
-            print(f"OK: {len(df)} rows added to {table}")
-
+            cursor.execute(f"SET IDENTITY_INSERT {table} ON")
+            identity_insert_was_set = True
         except Exception as e:
-            print(f"ERROR: During import for table {table} from {fname}: {e}")
-            try:
-                conn.rollback() # Rollback on any error during SET ON or to_sql
-                print(f"INFO: Transaction rolled back for table {table}.")
-            except Exception as er:
-                print(f"ERROR: During rollback for table {table}: {er}")
-        finally:
-            # Always attempt to turn IDENTITY_INSERT OFF if it was turned ON for this connection
-            if identity_insert_was_set_on:
-                print(f"DEBUG: In finally, for table {table}, identity_insert_was_set_on is True. Attempting to set IDENTITY_INSERT OFF.") # ADDED DEBUG
-                try:
-                    # This command will execute on the same connection `conn`.
-                    # If the previous transaction was committed or rolled back,
-                    # this will execute in a new context on the same connection.
-                    conn.execute(text(f"SET IDENTITY_INSERT [{table}] OFF"))
-                    conn.commit() # Ensure this SET OFF is also committed.
-                    print(f"INFO: IDENTITY_INSERT set to OFF for table {table}.")
-                except Exception as e_off:
-                    print(f"WARN: Failed to SET IDENTITY_INSERT OFF for table {table} in finally. Error: {e_off}")
-        # Connection `conn` is automatically closed here when exiting the `with` block.
+            print(f"WARN: Could not set IDENTITY_INSERT ON for {table}. Error: {e}")
 
-# Re-enabling FK checks is not a direct command in MSSQL like in MySQL.
-# Constraints are either enabled or disabled. If they were disabled, they'd need to be re-enabled individually.
-# Assuming they remained enabled throughout.
+    # Insert data row by row
+    successful_rows = 0
+    for item in filtered_data:
+        try:
+            # Convert datetime strings to datetime objects
+            values = []
+            for col in columns:
+                value = item.get(col)
+                # Convert date strings to datetime objects if the column name suggests it's a date
+                if value and isinstance(value, str) and ('date' in col.lower() or 'time' in col.lower() or col in ['expires_at', 'created_at', 'earned_at']):
+                    value = parse_date(value)
+                values.append(value)
+
+            # Execute the insert
+            cursor.execute(f"INSERT INTO {table} ({column_str}) VALUES ({placeholders})", values)
+            successful_rows += 1
+        except Exception as e:
+            print(f"Error inserting row in {table}: {e}")
+            # Continue with next row
+
+    # Set IDENTITY_INSERT OFF if it was set ON
+    if identity_insert_was_set:
+        try:
+            cursor.execute(f"SET IDENTITY_INSERT {table} OFF")
+        except Exception as e:
+            print(f"WARN: Could not set IDENTITY_INSERT OFF for {table}. Error: {e}")
+
+    # Commit the transaction
+    conn.commit()
+    print(f"OK: {successful_rows} rows added to {table}")
+
+# Close the connection
+conn.close()
 
 print("\nSUCCESS: All sample-data JSON generated and imported successfully.")

@@ -109,30 +109,31 @@ class CommentAnalysisService:
             comment_texts = comment_texts[:max_comments]
 
         prompt = f"""
-        Please analyze these {len(comment_texts)} customer comments from the last 3 months about a restaurant:
+        Lütfen bu restoranla ilgili son 3 ayda yapılan {len(comment_texts)} müşteri yorumunu analiz ediniz:
 
         {json.dumps(comment_texts)}
 
 
-        Important guidelines:
-        1. Ignore single letters, meaningless characters
-        2. Only consider substantial feedback that clearly expresses opinions about the restaurant
-        3. Focus on identifying consistent patterns across multiple comments
-        4. A negative aspect should only be included if it appears in multiple comments or is clearly a significant issue
-        5. Don't over-interpret short or ambiguous comments, but comments such as fresh, delicious are acceptable same as bad comments like cold, stale
-        
-        
-        Categorize them into:
-        1. What general positive aspects customers mentioned about the restaurant/seller
-        2. What general negative aspects customers mentioned about the restaurant/seller
-
-        Format your response as a JSON object with these keys:
-        - "good_aspects": [overall whats good about this restaurant in general (small phrases)]
-        - "bad_aspects": [overall whats bad about this restaurant in general (small phrases)]
-        - "reasoning:" [a short explanation of the reasoning behind the analysis]
+        Önemli kurallar:
+        1. Tek harfleri ve anlamsız karakterleri göz ardı et
+        2. Sadece restoran hakkında net fikir belirten yorumları dikkate al
+        3. Birden fazla yorumda tekrarlanan ortak noktalara odaklan
+        4. Olumsuz bir özellik ancak birden fazla yorumda geçiyorsa veya çok önemli bir sorun ise dahil edilmeli
+        5. Kısa veya belirsiz yorumları aşırı yorumlama, ancak "taze", "lezzetli" gibi olumlu yorumlar ile "soğuk", "bayat" gibi olumsuz yorumlar kabul edilebilir
+        6. Benzer anlamları tek bir kategoride birleştir (örneğin "lezzetli yemek" ve "harika yemek" aynı kategori olmalı: "lezzetli yemek")
 
 
-        Return ONLY the JSON object with no additional text.
+        Yorumları şu kategorilerde sınıflandır:
+        1. Müşterilerin restoran/satıcı hakkında belirttiği genel olumlu özellikler
+        2. Müşterilerin restoran/satıcı hakkında belirttiği genel olumsuz özellikler
+
+        Yanıtını aşağıdaki anahtar kelimelerle bir JSON nesnesi formatında ver:
+        - "good_aspects": [bu restoranın genel olarak iyi özellikleri (kısa ifadelerle, sadece Türkçe ve tekrar etmeyen kategoriler)]
+        - "bad_aspects": [bu restoranın genel olarak kötü özellikleri (kısa ifadelerle, sadece Türkçe ve tekrar etmeyen kategoriler)]
+        - "reasoning:" [analizin arkasındaki mantığın kısa açıklaması (sadece Türkçe)]
+
+
+        YALNIZCA JSON nesnesini döndür, başka metin ekleme.
         """
 
         payload = {
@@ -262,3 +263,4 @@ class CommentAnalysisService:
             "good_aspects": good_aspects,
             "bad_aspects": bad_aspects
         }
+
